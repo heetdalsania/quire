@@ -1,0 +1,15 @@
+{
+  "name": "@quire/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bidirectional sync between a directory of Markdown files and Yjs documents.",
+  "license": "AGPL-3.0-or-later",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc --build" },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "fast-diff": "^1.3.0",
+    "yjs": "^13.6.21"
+  }
+}
