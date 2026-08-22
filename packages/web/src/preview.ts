@@ -1,13 +1,27 @@
 import { marked } from "marked";
 import mermaid from "mermaid";
 
-let mermaidReady = false;
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+let mermaidTheme: "dark" | "default" | null = null;
 
+/**
+ * Mermaid bakes its palette in at initialize() time, so a diagram rendered before the
+ * viewer switched to dark keeps dark-on-dark arrows. Re-initialise whenever the scheme
+ * no longer matches what we last configured.
+ */
 function initMermaid(): void {
-  if (mermaidReady) return;
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default", securityLevel: "strict" });
-  mermaidReady = true;
+  const wanted = darkQuery.matches ? "dark" : "default";
+  if (mermaidTheme === wanted) return;
+  mermaid.initialize({ startOnLoad: false, theme: wanted, securityLevel: "strict" });
+  mermaidTheme = wanted;
+}
+
+/** Repaint diagrams when the viewer's colour scheme changes. */
+export function onColorSchemeChange(repaint: () => void): void {
+  darkQuery.addEventListener("change", () => {
+    mermaidTheme = null;
+    repaint();
+  });
 }
 
 /** Rewrite [[wiki links]] into real anchors before Markdown parsing. */

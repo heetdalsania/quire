@@ -3,14 +3,38 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#faf4ed" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#232136" media="(prefers-color-scheme: dark)" />
     <title>Quire</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23907aa9'/%3E%3Cpath d='M10 8h9a5 5 0 0 1 5 5v11h-9a5 5 0 0 1-5-5z' fill='%23faf4ed' opacity='.55'/%3E%3Cpath d='M8 10h9a5 5 0 0 1 5 5v11h-9a5 5 0 0 1-5-5z' fill='%23faf4ed'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <aside id="sidebar">
-      <header><span class="brand">Quire</span><span id="status" class="status">connecting</span></header>
-      <div class="search-wrap"><input id="search" type="search" placeholder="Search vault…" autocomplete="off" /></div>
+      <header>
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M10 6h9a5 5 0 0 1 5 5v13h-9a5 5 0 0 1-5-5z" class="sheet-back" />
+            <path d="M7 9h9a5 5 0 0 1 5 5v13H12a5 5 0 0 1-5-5z" class="sheet-front" />
+            <path d="M11 15h7M11 19h5" class="sheet-rule" />
+          </svg>
+        </span>
+        <span class="brand">Quire</span>
+        <span id="status" class="status"><i class="dot"></i><span class="status-text">connecting</span></span>
+      </header>
+
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" />
+        </svg>
+        <input id="search" type="search" placeholder="Search the vault" autocomplete="off" spellcheck="false" />
+      </div>
+
       <nav id="files" aria-label="Documents"></nav>
+
       <section id="backlinks-panel" hidden>
         <h2>Linked from</h2>
         <div id="backlinks"></div>
@@ -20,11 +44,23 @@
     <main>
       <div id="topbar">
         <span id="docpath"></span>
-        <button id="comment-btn" class="ghost" disabled title="Comment on the selected text">Comment</button>
-        <button id="attr-btn" class="ghost" aria-pressed="false" title="Tint text by who wrote it">Authors</button>
-        <button id="snapshot-btn" class="ghost" title="Commit a git snapshot now">Snapshot</button>
+        <div class="toolgroup">
+          <button id="comment-btn" class="tool" disabled title="Comment on the selected text">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /></svg>
+            <span>Comment</span>
+          </button>
+          <button id="attr-btn" class="tool" aria-pressed="false" title="Tint the text by who wrote it">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 13 13.5H3z" /></svg>
+            <span>Authors</span>
+          </button>
+          <button id="snapshot-btn" class="tool" title="Commit a git snapshot now">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" /><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" /></svg>
+            <span id="snapshot-label">Snapshot</span>
+          </button>
+        </div>
         <div id="presence"></div>
       </div>
+
       <div id="split">
         <div id="editor"></div>
         <article id="preview"></article>
@@ -34,11 +70,11 @@
     <aside id="rail">
       <section>
         <h2>Suggestions <span id="sug-count" class="count">0</span></h2>
-        <div id="suggestions" class="empty">Nothing pending.</div>
+        <div id="suggestions"></div>
       </section>
       <section>
         <h2>Comments <span id="cmt-count" class="count">0</span></h2>
-        <div id="comments" class="empty">No comments yet. Select text and press Comment.</div>
+        <div id="comments"></div>
       </section>
       <section id="agents-section" hidden>
         <h2>Agent contributions</h2>

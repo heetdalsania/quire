@@ -3,6 +3,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { yCollab } from "y-codemirror.next";
+import { quireEditorTheme, quireHighlight } from "./theme.js";
 import * as Y from "yjs";
 import {
   attributionExtension,
@@ -11,7 +12,7 @@ import {
   isAttributionVisible,
   setAttributionVisible,
 } from "./decorations.js";
-import { renderPreview } from "./preview.js";
+import { onColorSchemeChange, renderPreview } from "./preview.js";
 import { SyncProvider } from "./provider.js";
 import {
   Comments,
@@ -36,6 +37,7 @@ const me = { id: `u_${Math.random().toString(36).slice(2, 10)}`, name: pick(ANIM
 const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(sel)!;
 const filesEl = $("#files");
 const statusEl = $("#status");
+const statusTextEl = $(".status-text");
 const pathEl = $("#docpath");
 const presenceEl = $("#presence");
 const editorEl = $("#editor");
@@ -73,6 +75,7 @@ function renderFiles(files: string[], hits?: Map<string, string>): void {
       const button = document.createElement("button");
       button.title = path;
       const name = document.createElement("span");
+      name.className = "name";
       name.textContent = path;
       button.append(name);
       if (hits?.has(path)) {
@@ -161,9 +164,10 @@ function renderRail(): void {
 
   const suggestions = listSuggestions(ytext);
   sugCount.textContent = String(suggestions.length);
-  suggestionsEl.classList.toggle("empty", suggestions.length === 0);
+  sugCount.classList.toggle("hot", suggestions.length > 0);
   if (suggestions.length === 0) {
-    suggestionsEl.textContent = "Nothing pending.";
+    suggestionsEl.innerHTML =
+      '<p class="empty-note">Nothing awaiting review. Agent edits made with <code>suggest</code> appear here before they reach the file.</p>';
   } else {
     suggestionsEl.replaceChildren(
       ...suggestions.map((s) => {
@@ -172,7 +176,13 @@ function renderRail(): void {
         card.style.setProperty("--who", s.color);
         const who = document.createElement("div");
         who.className = "who";
-        who.textContent = `${s.authorName} proposes`;
+        who.append(document.createTextNode(`${s.authorName} proposes`));
+        if (s.authorId && authorRegistry.get(s.authorId)?.kind === "agent") {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = "agent";
+          who.append(chip);
+        }
         card.append(who);
         if (s.removed) {
           const del = document.createElement("del");
@@ -202,9 +212,8 @@ function renderRail(): void {
 
   const threads = comments?.list() ?? [];
   cmtCount.textContent = String(threads.length);
-  commentsEl.classList.toggle("empty", threads.length === 0);
   if (threads.length === 0) {
-    commentsEl.textContent = "No comments yet. Select text and press Comment.";
+    commentsEl.innerHTML = '<p class="empty-note">No comments yet. Select some text and press Comment.</p>';
   } else {
     commentsEl.replaceChildren(
       ...threads.map((t) => {
@@ -297,7 +306,7 @@ async function open(path: string): Promise<void> {
   url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
 
   provider = new SyncProvider(url.toString(), doc, (connected) => {
-    statusEl.textContent = connected ? "live" : "offline";
+    statusTextEl.textContent = connected ? "live" : "offline";
     statusEl.classList.toggle("live", connected);
   });
   registerLocalAuthor(doc, me.id, me.name, me.color);
@@ -313,6 +322,8 @@ async function open(path: string): Promise<void> {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown(),
+        quireEditorTheme,
+        quireHighlight,
         EditorView.lineWrapping,
         yCollab(ytext, provider.awareness),
         attributionTheme,
@@ -338,14 +349,68 @@ async function open(path: string): Promise<void> {
 
 // ---------------------------------------------------------------- toolbar
 
+/**
+ * Inline comment composer.
+ *
+ * A native prompt() blocks the page and cannot be styled, which is a poor fit for a tool
+ * whose whole premise is that other people are editing at the same time. The composer
+ * lives in the rail beside the thread it will become.
+ */
+function openComposer(from: number, to: number): void {
+  if (!ytext) return;
+  document.querySelector(".composer")?.remove();
+
+  const card = document.createElement("form");
+  card.className = "card composer";
+  card.style.setProperty("--who", me.color);
+
+  const who = document.createElement("div");
+  who.className = "who";
+  who.textContent = `${me.name} · new comment`;
+
+  const quote = document.createElement("blockquote");
+  quote.textContent = ytext.toString().slice(from, to).slice(0, 180);
+
+  const field = document.createElement("textarea");
+  field.rows = 3;
+  field.placeholder = "What needs saying?";
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "primary";
+  save.textContent = "Comment";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Cancel";
+  cancel.onclick = () => { card.remove(); view?.focus(); };
+  actions.append(save, cancel);
+
+  card.append(who, quote, field, actions);
+  card.onsubmit = (event) => {
+    event.preventDefault();
+    const body = field.value.trim();
+    if (!body) return;
+    comments?.add(ytext!, from, to, body, me.id, me.name);
+    card.remove();
+    renderRail();
+    view?.focus();
+  };
+  // Cmd/Ctrl+Enter to submit, Escape to abandon.
+  field.onkeydown = (event) => {
+    if (event.key === "Escape") { event.preventDefault(); cancel.click(); }
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save.click(); }
+  };
+
+  commentsEl.prepend(card);
+  field.focus();
+}
+
 commentBtn.onclick = () => {
-  if (!view || !ytext || !comments) return;
+  if (!view) return;
   const sel = view.state.selection.main;
-  if (sel.empty) return;
-  const body = window.prompt("Comment");
-  if (!body?.trim()) return;
-  comments.add(ytext, sel.from, sel.to, body.trim(), me.id, me.name);
-  renderRail();
+  if (!sel.empty) openComposer(sel.from, sel.to);
 };
 
 attrBtn.onclick = () => {
@@ -354,11 +419,17 @@ attrBtn.onclick = () => {
   attrBtn.setAttribute("aria-pressed", String(next));
 };
 
+const snapshotLabel = $("#snapshot-label");
 snapshotBtn.onclick = async () => {
   snapshotBtn.disabled = true;
   const { sha } = await api<{ sha: string | null }>("/api/snapshot", { method: "POST" });
-  snapshotBtn.textContent = sha ? `Saved ${sha.slice(0, 7)}` : "No changes";
-  setTimeout(() => { snapshotBtn.textContent = "Snapshot"; snapshotBtn.disabled = false; }, 1800);
+  snapshotLabel.textContent = sha ? sha.slice(0, 7) : "No changes";
+  snapshotBtn.classList.toggle("done", Boolean(sha));
+  setTimeout(() => {
+    snapshotLabel.textContent = "Snapshot";
+    snapshotBtn.classList.remove("done");
+    snapshotBtn.disabled = false;
+  }, 2000);
 };
 
 // ---------------------------------------------------------------- boot
@@ -368,4 +439,5 @@ renderFiles(allFiles);
 await refreshLinks();
 if (allFiles[0]) await open(allFiles[0]);
 else pathEl.textContent = "no markdown files in this folder yet";
+onColorSchemeChange(() => void paintPreview());
 setInterval(() => void refreshLinks(), 15_000);

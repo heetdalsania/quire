@@ -68,6 +68,8 @@ export function attributionExtension(text: Y.Text, onChange: () => void) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      /** Visibility the current decorations were built against. */
+      private builtWith = showAttribution;
       private readonly observer: () => void;
 
       constructor(view: EditorView) {
@@ -84,7 +86,13 @@ export function attributionExtension(text: Y.Text, onChange: () => void) {
       }
 
       update(update: ViewUpdate): void {
-        if (update.docChanged || update.viewportChanged) this.decorations = build();
+        // The Authors toggle dispatches an empty transaction, which changes neither the
+        // document nor the viewport -- so it has to be tracked explicitly or the tint
+        // never repaints.
+        if (update.docChanged || update.viewportChanged || this.builtWith !== showAttribution) {
+          this.builtWith = showAttribution;
+          this.decorations = build();
+        }
       }
 
       destroy(): void {

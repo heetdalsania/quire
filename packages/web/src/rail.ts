@@ -109,6 +109,7 @@ function spansOf(text: Y.Text): AttributedSpan[] {
 
 export interface Suggestion {
   id: string;
+  authorId: string | null;
   authorName: string;
   color: string;
   inserted: string;
@@ -124,6 +125,7 @@ export function listSuggestions(text: Y.Text): Suggestion[] {
     const known = span.author ? authorRegistry.get(span.author) : undefined;
     const entry = byId.get(id) ?? {
       id,
+      authorId: span.author,
       authorName: known?.name ?? "Someone",
       color: known?.color ?? "#8a8f98",
       inserted: "",
