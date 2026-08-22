@@ -1,0 +1,5 @@
+{
+  "name": "quire", "version": "0.0.0", "private": true, "type": "module",
+  "license": "AGPL-3.0-or-later", "bin": { "quire": "./bin/quire.js" },
+  "dependencies": { "@quire/server": "*" }
+}

@@ -2,13 +2,18 @@
   "name": "quire-monorepo",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "tsc --build && npm run build -w @quire/web",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --build --pretty"
+    "typecheck": "tsc --build --pretty",
+    "start": "node packages/cli/bin/quire.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

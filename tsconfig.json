@@ -1,4 +1,11 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/bridge" }]
+  "references": [
+    {
+      "path": "./packages/bridge"
+    },
+    {
+      "path": "./packages/server"
+    }
+  ]
 }
