@@ -7,13 +7,18 @@ import type { DocHandle } from "@quire/bridge";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+/** Server -> client only: identifies the document state lineage. See Room.add. */
+const MSG_EPOCH = 2;
 
 /** One collaborative session over a single document. */
 export class Room {
   readonly awareness: Awareness;
   private readonly sockets = new Set<WebSocket>();
 
-  constructor(readonly handle: DocHandle) {
+  constructor(
+    readonly handle: DocHandle,
+    private readonly epoch: string,
+  ) {
     this.awareness = new Awareness(handle.doc);
     this.awareness.setLocalState(null);
 
@@ -42,6 +47,19 @@ export class Room {
 
   add(socket: WebSocket): void {
     this.sockets.add(socket);
+
+    // Epoch first, before any sync traffic.
+    //
+    // Each server process seeds its Y.Doc from disk with a fresh clientID, so a client
+    // still holding state from a previous process would merge that state in as genuinely
+    // concurrent content -- Yjs has no way to know the identical characters are the same
+    // text, so it concatenates and the document silently doubles. Restarting the server
+    // with a tab open used to corrupt every open file. The client compares this epoch and
+    // discards its local doc instead of merging when the lineage has changed.
+    const epochMsg = encoding.createEncoder();
+    encoding.writeVarUint(epochMsg, MSG_EPOCH);
+    encoding.writeVarString(epochMsg, this.epoch);
+    socket.send(encoding.toUint8Array(epochMsg));
 
     // Sync step 1: ask the client what it has.
     const sync = encoding.createEncoder();

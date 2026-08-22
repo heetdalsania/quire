@@ -9,12 +9,43 @@
   <body>
     <aside id="sidebar">
       <header><span class="brand">Quire</span><span id="status" class="status">connecting</span></header>
-      <nav id="files"></nav>
+      <div class="search-wrap"><input id="search" type="search" placeholder="Search vault…" autocomplete="off" /></div>
+      <nav id="files" aria-label="Documents"></nav>
+      <section id="backlinks-panel" hidden>
+        <h2>Linked from</h2>
+        <div id="backlinks"></div>
+      </section>
     </aside>
+
     <main>
-      <div id="topbar"><span id="docpath"></span><div id="presence"></div></div>
-      <div id="split"><div id="editor"></div><article id="preview"></article></div>
+      <div id="topbar">
+        <span id="docpath"></span>
+        <button id="comment-btn" class="ghost" disabled title="Comment on the selected text">Comment</button>
+        <button id="attr-btn" class="ghost" aria-pressed="false" title="Tint text by who wrote it">Authors</button>
+        <button id="snapshot-btn" class="ghost" title="Commit a git snapshot now">Snapshot</button>
+        <div id="presence"></div>
+      </div>
+      <div id="split">
+        <div id="editor"></div>
+        <article id="preview"></article>
+      </div>
     </main>
+
+    <aside id="rail">
+      <section>
+        <h2>Suggestions <span id="sug-count" class="count">0</span></h2>
+        <div id="suggestions" class="empty">Nothing pending.</div>
+      </section>
+      <section>
+        <h2>Comments <span id="cmt-count" class="count">0</span></h2>
+        <div id="comments" class="empty">No comments yet. Select text and press Comment.</div>
+      </section>
+      <section id="agents-section" hidden>
+        <h2>Agent contributions</h2>
+        <div id="agents"></div>
+      </section>
+    </aside>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

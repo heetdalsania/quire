@@ -1,12 +1,28 @@
 {
-  "name": "@quire/web", "version": "0.0.0", "private": true, "type": "module",
+  "name": "@quire/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
   "license": "AGPL-3.0-or-later",
-  "scripts": { "build": "vite build", "dev": "vite" },
-  "dependencies": {
-    "@codemirror/commands": "^6.7.1", "@codemirror/lang-markdown": "^6.3.1",
-    "@codemirror/language": "^6.10.8", "@codemirror/state": "^6.5.0",
-    "@codemirror/view": "^6.36.1", "lib0": "^0.2.99", "marked": "^15.0.4",
-    "y-codemirror.next": "^0.3.5", "y-protocols": "^1.0.6", "yjs": "^13.6.21"
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
   },
-  "devDependencies": { "vite": "^6.0.7" }
+  "dependencies": {
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.36.1",
+    "lib0": "^0.2.99",
+    "marked": "^15.0.4",
+    "mermaid": "^11.17.0",
+    "y-codemirror.next": "^0.3.5",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.21",
+    "@quire/bridge": "*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
 }

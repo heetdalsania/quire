@@ -1,8 +1,9 @@
 # Quire — Master Plan & Status Report
 
 **Last updated:** 2026-08-21
-**Status:** Phase 0 and Phase 1 complete. Bridge spike **PASSED** — all 10 acceptance tests green.
-Next up: Phase 2 (v0.1 MVP).
+**Status:** Phases 0–4 complete. Bridge spike passed; v0.1 MVP, Phase 3 (comments, wiki-links,
+search, Mermaid, git snapshots) and Phase 4 (the agent wedge) are all built and verified end to end.
+Remaining: dogfooding, then Phase 5 launch.
 **Owner:** Heet (ASU)
 
 ---
@@ -166,7 +167,7 @@ we think, and that is genuinely useful information rather than a failure.
 
 ---
 
-### Phase 2 — v0.1 MVP (4–6 sessions)
+### Phase 2 — v0.1 MVP ✅ **DONE**
 
 `npx quire ~/docs` opens a browser and the folder is multiplayer.
 
@@ -184,7 +185,7 @@ we think, and that is genuinely useful information rather than a failure.
 
 ---
 
-### Phase 3 — v0.2 Usable (3–5 sessions)
+### Phase 3 — v0.2 Usable ✅ **DONE**
 
 - [ ] Comment threads anchored via `Y.RelativePosition`, with an explicit orphaned-comment policy
 - [ ] Wiki-links, backlinks, document outline, quick switcher
@@ -198,7 +199,7 @@ criterion, not a build criterion — it is satisfied by the dogfooding window, n
 
 ---
 
-### Phase 4 — v0.3 THE WEDGE (4–6 sessions) ★ **the release that matters**
+### Phase 4 — v0.3 THE WEDGE ✅ **BUILT** ★ *(demo clip still to record)*
 
 Everything before this is table stakes that CollabMD already has. This is the differentiator.
 
@@ -422,3 +423,48 @@ optimisation work is warranted yet.
   merge from. Rather than silently picking a winner it emits `doc:conflict` and keeps the CRDT content.
 - **Documents are eagerly loaded at open.** Fine for normal vaults; needs lazy loading before anyone
   points it at a 10,000-file repository.
+
+---
+
+## 12. Phases 2–4 build notes (2026-08-22)
+
+Everything through the agent wedge is built, and verified end to end with two real browsers
+plus a real MCP client. 22 tests green.
+
+**Packages:** `bridge` (filesystem↔CRDT, attribution, comments, git) · `server` (HTTP + WS sync,
+search, link graph) · `web` (CodeMirror 6 client) · `cli` (`quire`) · `mcp` (`quire-mcp`).
+
+### Deviations from §2, with reasons
+
+- **No Hocuspocus.** It wants to own its own `Y.Doc`; the Vault already does. Adopting it meant
+  relaying every update between two document trees. Replaced with ~150 lines of `y-protocols`
+  sync, which removed the impedance mismatch entirely.
+- **No `y-websocket` on the client** — it assumes a room-name-in-path URL scheme, and a document
+  path is not a room name.
+- **Per-agent undo is attribution-based, not `UndoManager`-based.** Yjs transaction origins are
+  local to the process that made the edit and do not survive the wire, so a browser cannot undo a
+  remote agent's work by origin. Walking the attribution marks does survive. Limitation: it
+  removes what an author inserted but cannot resurrect text they deleted — which is exactly what
+  suggest mode exists to avoid.
+
+### Three more defects found by testing
+
+1. **Agents edited an empty document.** `AgentSession.connect()` resolved on the server's sync
+   *step 1*, which only asks what the client has. The document arrives in step 2. The agent's
+   first edit therefore ran against an empty doc and failed to find its target text.
+2. **Attribution died with the connection.** Author names came from awareness, which is ephemeral.
+   Once an agent disconnected, its spans rendered as "Someone". Author identity is now recorded in
+   the document itself, so it outlives any session.
+3. **Restarting the server duplicated every open document — on disk.** The worst bug in the
+   project so far. Each server process seeds its `Y.Doc` from the file with a fresh clientID, so a
+   browser still holding state from the previous process merged it back as genuinely concurrent
+   content; Yjs cannot tell that identical characters are the same text, so it concatenated. Any
+   user who restarted `npx quire` with a tab open would have corrupted their files. Fixed with a
+   **document epoch**: the server announces its lineage before any sync traffic, and a client
+   whose epoch no longer matches discards its local state instead of merging. Pinned as a
+   regression test.
+
+### Cost check
+
+Still zero. Every dependency is MIT/permissive npm, the server binds loopback, identity is
+generated in the browser, and nothing leaves the machine.

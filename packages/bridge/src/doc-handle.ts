@@ -1,4 +1,6 @@
 import * as Y from "yjs";
+import diff from "fast-diff";
+import { applyCommittedDiff, committedText, pendingSuggestions } from "./attribution.js";
 import { applyExternalChange } from "./diff.js";
 
 /**
@@ -35,7 +37,16 @@ export class DocHandle {
     this.text = this.doc.getText(CONTENT_KEY);
   }
 
+  /**
+   * The plain-Markdown projection written to disk. Text that is only *proposed* by a
+   * suggestion is excluded, so an un-accepted agent edit never reaches the file.
+   */
   getContent(): string {
+    return committedText(this.text);
+  }
+
+  /** The full CRDT text, including un-accepted suggestion spans. */
+  getFullText(): string {
     return this.text.toString();
   }
 
@@ -47,7 +58,11 @@ export class DocHandle {
     const base = this.lastDiskContent ?? this.getContent();
     let changed = false;
     this.doc.transact(() => {
-      changed = applyExternalChange(this.text, base, content);
+      changed = pendingSuggestions(this.text).length > 0
+        ? // Disk cannot see suggestion spans, so the diff has to be computed in
+          // committed space and projected back onto full-text offsets.
+          applyCommittedDiff(this.text, content, diff)
+        : applyExternalChange(this.text, base, content);
     }, DISK_ORIGIN);
     this.lastDiskContent = content;
     return changed;

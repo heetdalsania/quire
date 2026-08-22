@@ -6,6 +6,7 @@ import type * as Y from "yjs";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+const MSG_EPOCH = 2;
 
 /**
  * Minimal Yjs websocket client speaking the same protocol as @quire/server.
@@ -18,10 +19,14 @@ export class SyncProvider {
   private retry = 0;
   private closed = false;
 
+  private epoch: string | null = null;
+
   constructor(
     private readonly url: string,
     readonly doc: Y.Doc,
     private readonly onStatus: (connected: boolean) => void,
+    /** Called when the server's document lineage changed and local state must be dropped. */
+    private readonly onStale: () => void = () => location.reload(),
   ) {
     this.awareness = new Awareness(doc);
 
@@ -73,6 +78,17 @@ export class SyncProvider {
         if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
       } else if (type === MSG_AWARENESS) {
         applyAwarenessUpdate(this.awareness, decoding.readVarUint8Array(decoder), this);
+      } else if (type === MSG_EPOCH) {
+        const epoch = decoding.readVarString(decoder);
+        if (this.epoch === null) {
+          this.epoch = epoch;
+        } else if (this.epoch !== epoch) {
+          // The server restarted. Merging our stale doc would duplicate the document,
+          // so drop it and rebuild from the server instead.
+          this.closed = true;
+          ws.close();
+          this.onStale();
+        }
       }
     };
 

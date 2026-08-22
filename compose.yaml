@@ -1,0 +1,9 @@
+services:
+  quire:
+    build: .
+    ports:
+      - "127.0.0.1:4321:4321"
+    volumes:
+      # Point this at your own Markdown folder.
+      - ./vault:/vault
+    restart: unless-stopped
