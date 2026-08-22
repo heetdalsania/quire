@@ -1,7 +1,8 @@
 # Quire — Master Plan & Status Report
 
 **Last updated:** 2026-08-21
-**Status:** Pre-code. Research complete, decisions locked, nothing built yet.
+**Status:** Phase 0 and Phase 1 complete. Bridge spike **PASSED** — all 10 acceptance tests green.
+Next up: Phase 2 (v0.1 MVP).
 **Owner:** Heet (ASU)
 
 ---
@@ -14,10 +15,10 @@
 files, where the files stay plain `.md` on the user's disk and AI agents can join editing sessions as
 first-class collaborators with visible cursors and attributed edits.
 
-**Where things stand.** Three documents exist and no code does. The research phase is finished — the
-competitive landscape, technical feasibility, cost model, and funding paths have all been investigated
-and written up. The decisions in §2 are **settled**; do not reopen them without the owner explicitly
-asking. The next action is the technical spike in Phase 1.
+**Where things stand.** Research is finished and the **Phase 1 bridge spike has passed** — the
+go/no-go gate is cleared and the project is viable. `packages/bridge` is real, tested code. The
+decisions in §2 are **settled**; do not reopen them without the owner explicitly asking. The next
+action is Phase 2, the v0.1 MVP. See §11 for what the spike actually found.
 
 **The companion documents:**
 - [DESIGN.md](./DESIGN.md) — landscape research, architecture, hard problems, stack rationale
@@ -118,7 +119,7 @@ upper end of its range.
 
 ## 4. Phase detail
 
-### Phase 0 — Setup (1 session)
+### Phase 0 — Setup ✅ **DONE**
 
 - [ ] `git init`; claim GitHub org `quiredocs`, npm package, and a domain
 - [ ] Monorepo scaffold: `packages/server`, `packages/web`, `packages/cli`, `packages/mcp`
@@ -130,7 +131,7 @@ upper end of its range.
 
 ---
 
-### Phase 1 — THE BRIDGE SPIKE (3–5 sessions) ⚠️ **GO / NO-GO**
+### Phase 1 — THE BRIDGE SPIKE ✅ **PASSED** (1 session)
 
 **This is the most important phase in the plan. Do it before any UI work.**
 
@@ -340,7 +341,8 @@ and the downside is bounded at a few weeks.** That asymmetry is the argument for
 1. One Y.Doc per file, or a vault-level doc with subdocs? *(Lean per-file with a lightweight index doc — affects memory, ACL granularity, and rename atomicity.)*
 2. Do agents authenticate as distinct principals with their own ACLs, or borrow the inviting user's permissions? *(Distinct is correct; borrowing ships faster.)*
 3. Git snapshot trigger: on quiet, on interval, on explicit save, or on session end?
-4. Attribution granularity — per character or per span? **Phase 1 measurement decides this.**
+4. ~~Attribution granularity — per character or per span?~~ **RESOLVED: span-level.** Measured at
+   1.38x encoded size vs 20.6x for character-level. See §11.
 5. Hosted tier at all, or self-host only? *(Defer to post-launch. Real demand will tell you.)*
 6. E2E encryption is likely incompatible with the agent wedge and server-side search. Decide deliberately and document the tradeoff rather than leaving it ambiguous.
 
@@ -358,3 +360,65 @@ and the downside is bounded at a few weeks.** That asymmetry is the argument for
 
 **Do not:** build UI before the bridge works, add a feature not in §4, or announce anything publicly
 before the demo clip exists.
+
+---
+
+## 11. Phase 1 spike results (2026-08-21)
+
+**Verdict: GO.** All 10 acceptance tests pass. `packages/bridge` implements the filesystem↔CRDT sync
+engine, with `npm test` and `npm run typecheck` green in CI.
+
+### What the design settled on
+
+- **Three-way merge, not disk-wins.** External changes are extracted as `diff(base, theirs)` where
+  `base` is the last content Quire observed on disk, then replayed onto the CRDT. Diffing
+  `ours → theirs` directly would let disk silently discard concurrent in-memory edits. When the CRDT
+  hasn't diverged from disk — the overwhelmingly common case, since Quire writes continuously — this
+  reduces to an exact two-way diff with no approximation.
+- **Loop prevention comes from transaction origins, not content comparison.** Anything applied with
+  `DISK_ORIGIN` never triggers a write. Content checks remain, but purely as an optimisation.
+- **Atomic writes** (temp + rename) so readers never observe a half-written document.
+
+### Two real defects the suite caught
+
+1. **Silent data loss on startup.** `Vault.open()` returned before existing files were indexed, because
+   chokidar's `ready` fires *ahead of* `awaitWriteFinish`-delayed `add` events. `getDoc()` then minted an
+   empty handle for a file that already had content, and the first edit wrote that empty document over
+   the real file. Fixed with an explicit initial scan before the vault is handed to any caller.
+2. **Rename detection assumed event ordering.** It expected unlink-before-add; the OS guarantees no such
+   thing (measured: `add` ~27ms *ahead of* `unlink` on macOS). This briefly exposed a provisional
+   duplicate document that a caller could attach to and then lose. Now ordering-independent, detected
+   from either half of the pair.
+
+Both were the sort of thing that survives a demo and corrupts real users' files. Finding them in
+Week 1 is precisely the return on doing this spike before any UI.
+
+### Attribution measurement — settles the Phase 4 schema
+
+| Granularity | Encoded (50 KB doc) | vs raw text |
+|---|---:|---:|
+| raw markdown | 48.9 KB | 1.00x |
+| plain CRDT, 782 inserts | 48.9 KB | 1.00x |
+| **span attribution, 2 authors** | **67.3 KB** | **1.38x** |
+| span attribution, 8 authors | 82.5 KB | 1.69x |
+| character attribution | — | **20.6x** |
+
+**Decision: span-level attribution.** 1.38x is comfortably affordable; character-level is not. The
+Phase 4 wedge is designed around author-tagged spans, which is also the right granularity for the UI
+("this paragraph was written by the agent") rather than per-keystroke provenance.
+
+### Performance
+
+1 MB document: **2 ms** to open, **83 ms** to merge an external edit. Well inside budget, and no
+optimisation work is warranted yet.
+
+### Known limitations, deliberately accepted
+
+- **Divergent three-way merges are best-effort.** When the CRDT has diverged from `base` *and* an
+  external edit lands, external edit positions are mapped through a diff-derived position map, clamping
+  to the start of locally-changed regions. Principled, but approximate. The exact path covers the common
+  case; this only degrades under genuinely simultaneous disk and CRDT edits.
+- **A memory-created document colliding with a file appearing at the same path** has no shared base to
+  merge from. Rather than silently picking a winner it emits `doc:conflict` and keeps the CRDT content.
+- **Documents are eagerly loaded at open.** Fine for normal vaults; needs lazy loading before anyone
+  points it at a 10,000-file repository.
