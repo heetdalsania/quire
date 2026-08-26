@@ -16,7 +16,7 @@ import {
 import { onColorSchemeChange, renderPreview } from "./preview.js";
 import { SyncProvider } from "./provider.js";
 import {
-  Comments,
+  CommentStore,
   acceptSuggestion,
   authorsPresent,
   committedTextOf,
@@ -61,7 +61,7 @@ let provider: SyncProvider | null = null;
 let persistence: IndexeddbPersistence | null = null;
 let doc: Y.Doc | null = null;
 let ytext: Y.Text | null = null;
-let comments: Comments | null = null;
+let comments: CommentStore | null = null;
 let current: string | null = null;
 let allFiles: string[] = [];
 let links: { backlinks: Record<string, string[]> } = { backlinks: {} };
@@ -340,7 +340,7 @@ async function open(path: string): Promise<void> {
   current = path;
   doc = new Y.Doc();
   ytext = doc.getText("content");
-  comments = new Comments(doc);
+  comments = new CommentStore(doc);
 
   const url = new URL(`/sync?doc=${encodeURIComponent(path)}`, location.href);
   url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -356,7 +356,7 @@ async function open(path: string): Promise<void> {
   registerLocalAuthor(doc, me.id, me.name, me.color);
   provider.awareness.setLocalStateField("user", { name: me.name, color: me.color, kind: me.kind });
   provider.awareness.on("change", () => { renderPresence(); renderRail(); });
-  comments.observe(renderRail);
+  comments.yarray.observeDeep(renderRail);
 
   view = new EditorView({
     parent: editorEl,
@@ -382,6 +382,9 @@ async function open(path: string): Promise<void> {
       ],
     }),
   });
+
+  // Exposed for automated walkthroughs and end-to-end tests; harmless in normal use.
+  (window as unknown as { __quireView?: EditorView }).__quireView = view;
 
   pathEl.textContent = path;
   await paintPreview();
@@ -436,7 +439,7 @@ function openComposer(from: number, to: number): void {
     event.preventDefault();
     const body = field.value.trim();
     if (!body) return;
-    comments?.add(ytext!, from, to, body, me.id, me.name);
+    comments?.add({ text: ytext!, from, to, body, authorId: me.id, authorName: me.name });
     card.remove();
     renderRail();
     view?.focus();

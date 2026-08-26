@@ -13,6 +13,10 @@
     "./attribution": {
       "types": "./dist/src/attribution.d.ts",
       "default": "./dist/src/attribution.js"
+    },
+    "./comments": {
+      "types": "./dist/src/comments.d.ts",
+      "default": "./dist/src/comments.js"
     }
   },
   "scripts": {

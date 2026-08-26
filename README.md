@@ -6,12 +6,34 @@ Point Quire at a folder of Markdown. It becomes a live multiplayer workspace, an
 can join editing sessions as first-class collaborators with visible cursors and separately
 revertable edits. Your documents stay plain `.md` files on disk, in your git repo, owned by you.
 
+![Quire: a person and an agent editing the same document at once](docs/demo.gif)
+
+*Recorded against the real application. A person types while an agent edits the same document,
+proposes a change that never touches the file until it is accepted, and then authorship is
+revealed. Nobody reloads, and nothing conflicts.*
+
 ```bash
 npm install && npm run build
 node packages/cli/bin/quire.js ~/my-notes
 ```
 
 No account. No signup. No network calls. Binds `127.0.0.1` by default.
+
+## Where it sits
+
+Plenty of tools do two of these. Quire is the one that does all three.
+
+| | Multiplayer | Agent-native | Plain files |
+|---|:---:|:---:|:---:|
+| Notion · Outline · Docmost · HedgeDoc | ✅ | ❌ | ❌ |
+| Obsidian · SilverBullet · Logseq | ❌ | ~ | ✅ |
+| [SoloMD](https://github.com/zhitongblog/solomd) | ❌ | ✅ | ✅ |
+| [CollabMD](https://github.com/andes90/collabmd) | ✅ | ❌ | ✅ |
+| **Quire** | ✅ | ✅ | ✅ |
+
+The difference that matters: in Quire the agent is a peer in the *same CRDT session* you are typing
+in — visible cursor, attributed spans, separately revertable — rather than a batch process whose
+diff you read afterwards.
 
 ## What works today
 
@@ -43,6 +65,13 @@ Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `app
 The agent gets a presence identity and a cursor. You can type straight through its edits —
 CRDTs make that a non-event.
 
+## Security
+
+Binds `127.0.0.1`, serves only its own origin, and refuses cross-origin requests so a web page you
+happen to have open cannot reach your vault. No telemetry, no accounts, nothing leaves the machine.
+**There is no authentication**, so treat `--host 0.0.0.0` as "anyone who can reach this port can
+edit everything". See [SECURITY.md](./SECURITY.md).
+
 ## Self-hosting
 
 ```bash
@@ -56,7 +85,10 @@ docker compose up --build
 | **[PLAN.md](./PLAN.md)** | Execution plan, locked decisions, phases, outcomes, risks |
 | [DESIGN.md](./DESIGN.md) | Competitive landscape, architecture, the hard problems |
 | [BUSINESS.md](./BUSINESS.md) | Cost math, deployment, funding paths |
+| [MARKETING.md](./MARKETING.md) | Positioning, launch sequence, what to measure |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Architecture invariants — read before a large PR |
+| [SECURITY.md](./SECURITY.md) | Threat model and known limitations |
+| [tools/recorder](./tools/recorder) | Regenerates `docs/demo.gif` from the real app |
 
 ## Licence
 
