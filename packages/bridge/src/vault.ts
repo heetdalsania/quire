@@ -113,9 +113,17 @@ export class Vault extends EventEmitter {
 
   // ---------------------------------------------------------------- public API
 
-  /** Get (or lazily create) the document for a vault-relative path. */
+  /**
+   * Get (or lazily create) the document for a vault-relative path.
+   *
+   * Throws on a path that escapes the vault. The server validates too, but this is the
+   * boundary that actually writes files, so it refuses rather than trusting its caller.
+   */
   getDoc(relPath: string): DocHandle {
     const key = normalise(relPath);
+    if (!isContainedPath(key)) {
+      throw new Error(`Refusing document path outside the vault: ${relPath}`);
+    }
     let handle = this.handles.get(key);
     if (!handle) {
       handle = new DocHandle(key);
@@ -130,8 +138,21 @@ export class Vault extends EventEmitter {
     return this.handles.has(normalise(relPath));
   }
 
+  /**
+   * Document paths that actually exist as files.
+   *
+   * A handle opened for a path that has never been written is deliberately excluded:
+   * listing a document the user cannot find on disk is worse than not listing it. It
+   * appears as soon as it has content and has been flushed.
+   */
   list(): string[] {
-    return [...this.handles.keys()].filter((p) => !this.handles.get(p)?.deleted).sort();
+    const out: string[] = [];
+    for (const [path, handle] of this.handles) {
+      if (handle.deleted) continue;
+      if (handle.lastDiskContent === null && handle.getContent().length === 0) continue;
+      out.push(path);
+    }
+    return out.sort();
   }
 
   /** Force every pending write to disk and wait for it. Essential for deterministic tests. */
@@ -424,4 +445,11 @@ export class Vault extends EventEmitter {
 
 function normalise(relPath: string): string {
   return relPath.split(sep).join("/").replace(/^\.\//, "");
+}
+
+/** True when a normalised relative path stays inside the vault. */
+function isContainedPath(relPath: string): boolean {
+  if (!relPath || relPath.includes("\0")) return false;
+  if (relPath.startsWith("/") || /^[a-zA-Z]:/.test(relPath)) return false;
+  return !relPath.split("/").some((s) => s === ".." || s === "" || s === ".");
 }

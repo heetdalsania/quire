@@ -13,8 +13,14 @@ if (args.includes("--help") || args.includes("-h")) {
 
     --port <n>            Port to listen on (default 4321)
     --host <addr>         Bind address (default 127.0.0.1, local only)
+    --allow-host <name>   Additionally trust this hostname (repeatable). Needed only
+                          when deliberately exposing the vault, e.g. via a tunnel.
+    --no-git              Disable periodic git snapshots
 
-  No account, no signup, no network calls. Everything runs on this machine.
+  Requests are refused unless they come from loopback or an allowed host, so a web page
+  you happen to have open cannot reach into your vault.
+
+  No account, no signup, no telemetry, no network calls.
 `);
   process.exit(0);
 }
@@ -33,11 +39,18 @@ if (!existsSync(webRoot)) {
   process.exit(1);
 }
 
+const allowedHosts = args.reduce((acc, arg, i) => {
+  if (arg === "--allow-host" && args[i + 1]) acc.push(args[i + 1]);
+  return acc;
+}, []);
+
 const server = await QuireServer.start({
   root,
   webRoot,
   port: Number(flag("--port", 4321)),
   host: flag("--host", "127.0.0.1"),
+  allowedHosts,
+  git: args.includes("--no-git") ? false : {},
 });
 
 const count = server.vault.list().length;
@@ -45,7 +58,10 @@ console.log(`\n  Quire\n`);
 console.log(`  vault   ${root}`);
 console.log(`  docs    ${count} markdown file${count === 1 ? "" : "s"}`);
 console.log(`  local   http://127.0.0.1:${server.port}\n`);
-console.log(`  Local only. Nothing is uploaded and no account is needed.`);
+const snapshots = server.git && (await server.git.isRepo());
+console.log(`  git     ${snapshots ? "snapshots on (commits when idle)" : "not a repository -- snapshots off"}`);
+if (allowedHosts.length > 0) console.log(`  trusted ${allowedHosts.join(", ")}`);
+console.log(`\n  Local only. Nothing is uploaded and no account is needed.`);
 console.log(`  Ctrl+C to stop.\n`);
 
 const shutdown = async () => {

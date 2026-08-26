@@ -32,8 +32,22 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
 
   const sessions = new Map<string, AgentSession>();
 
-  /** Join a document's live session, reusing an existing one. */
-  const join = async (path: string): Promise<AgentSession> => {
+  /**
+   * Join a document's live session, reusing an existing one.
+   *
+   * `mustExist` is the default: joining an unknown path would otherwise mint an empty
+   * document, and an agent that typos a filename would silently create a new one rather
+   * than reporting that it could not find the file.
+   */
+  const join = async (path: string, mustExist = true): Promise<AgentSession> => {
+    if (mustExist && !sessions.has(path)) {
+      const files = await listFiles();
+      if (!files.includes(path)) {
+        throw new Error(
+          `No document at ${path}. Existing documents: ${files.slice(0, 20).join(", ") || "(none)"}`,
+        );
+      }
+    }
     let session = sessions.get(path);
     if (!session) {
       session = new AgentSession(options.serverUrl, path, author);
@@ -42,6 +56,17 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     }
     return session;
   };
+
+  /** Wrap a handler so a thrown error becomes a tool error rather than a transport fault. */
+  const guard =
+    <A>(fn: (args: A) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>) =>
+    async (args: A) => {
+      try {
+        return await fn(args);
+      } catch (error) {
+        return fail((error as Error).message);
+      }
+    };
 
   const listFiles = async (): Promise<string[]> => {
     const res = await fetch(new URL("/api/files", options.serverUrl));
@@ -79,10 +104,10 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
           .describe("Return only text that has been accepted onto disk."),
       },
     },
-    async ({ path, committed_only }) => {
+    guard(async ({ path, committed_only }: { path: string; committed_only?: boolean | undefined }) => {
       const session = await join(path);
       return ok(committed_only ? committedText(session.text) : session.text.toString());
-    },
+    }),
   );
 
   server.registerTool(
@@ -102,7 +127,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         suggest: z.boolean().optional().describe("Propose the change instead of applying it."),
       },
     },
-    async ({ path, old_text, new_text, suggest }) => {
+    guard(async ({ path, old_text, new_text, suggest }: { path: string; old_text: string; new_text: string; suggest?: boolean | undefined }) => {
       const session = await join(path);
       const current = session.text.toString();
 
@@ -136,7 +161,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
           ? `Proposed change to ${path} as suggestion ${suggestionId}. It is visible in the editor and awaiting review; the file on disk is unchanged.`
           : `Applied edit to ${path}. Visible live to every connected editor and written to disk.`,
       );
-    },
+    }),
   );
 
   server.registerTool(
@@ -150,7 +175,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         suggest: z.boolean().optional(),
       },
     },
-    async ({ path, text, suggest }) => {
+    guard(async ({ path, text, suggest }: { path: string; text: string; suggest?: boolean | undefined }) => {
       const session = await join(path);
       const at = session.text.length;
       session.announce({ anchor: at, head: at });
@@ -159,7 +184,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       });
       await session.settle();
       return ok(`Appended ${text.length} characters to ${path}.`);
-    },
+    }),
   );
 
   server.registerTool(
@@ -169,7 +194,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       description: "List suggestion ids in a document that are still awaiting human review.",
       inputSchema: { path: z.string() },
     },
-    async ({ path }) => {
+    guard(async ({ path }: { path: string }) => {
       const session = await join(path);
       const ids = pendingSuggestions(session.text);
       if (ids.length === 0) return ok("No pending suggestions.");
@@ -185,7 +210,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         return `${id}\n  + ${JSON.stringify(inserted)}\n  - ${JSON.stringify(removed)}`;
       });
       return ok(detail.join("\n"));
-    },
+    }),
   );
 
   server.registerTool(
@@ -195,7 +220,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       description: "List comment threads on a document, including orphaned ones.",
       inputSchema: { path: z.string() },
     },
-    async ({ path }) => {
+    guard(async ({ path }: { path: string }) => {
       const session = await join(path);
       const threads = new CommentStore(session.doc).list();
       if (threads.length === 0) return ok("No comments.");
@@ -207,7 +232,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
           )
           .join("\n"),
       );
-    },
+    }),
   );
 
   server.registerTool(
@@ -219,7 +244,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         "instead of editing when the right change is not obvious.",
       inputSchema: { path: z.string(), quote: z.string(), body: z.string() },
     },
-    async ({ path, quote, body }) => {
+    guard(async ({ path, quote, body }: { path: string; quote: string; body: string }) => {
       const session = await join(path);
       const at = session.text.toString().indexOf(quote);
       if (at === -1) return fail(`quote not found in ${path}`);
@@ -233,7 +258,31 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       });
       await session.settle();
       return ok(`Comment added to ${path}.`);
+    }),
+  );
+
+  server.registerTool(
+    "create_document",
+    {
+      title: "Create a document",
+      description:
+        "Create a new Markdown document in the vault. Use this deliberately: every other " +
+        "tool refuses an unknown path rather than creating one by accident.",
+      inputSchema: {
+        path: z.string().describe("Vault-relative path ending in .md"),
+        content: z.string().optional(),
+      },
     },
+    guard(async ({ path, content }: { path: string; content?: string | undefined }) => {
+      if (!/\.(md|markdown)$/i.test(path)) return fail("Document paths must end in .md");
+      const files = await listFiles();
+      if (files.includes(path)) return fail(`${path} already exists`);
+
+      const session = await join(path, false);
+      insertAttributed(session.text, 0, content ?? `# ${path.replace(/\.md$/i, "")}\n\n`, author);
+      await session.settle();
+      return ok(`Created ${path}.`);
+    }),
   );
 
   server.registerTool(
@@ -243,7 +292,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       description: "Full-text search across every document in the vault.",
       inputSchema: { query: z.string(), limit: z.number().optional() },
     },
-    async ({ query, limit }) => {
+    guard(async ({ query, limit }: { query: string; limit?: number | undefined }) => {
       const url = new URL("/api/search", options.serverUrl);
       url.searchParams.set("q", query);
       if (limit) url.searchParams.set("limit", String(limit));
@@ -251,7 +300,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       const body = (await res.json()) as { results: Array<{ path: string; line: number; text: string }> };
       if (body.results.length === 0) return ok("No matches.");
       return ok(body.results.map((r) => `${r.path}:${r.line}: ${r.text}`).join("\n"));
-    },
+    }),
   );
 
   return server;

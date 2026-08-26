@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { WebSocketServer } from "ws";
 import { GitSnapshotter, type GitSnapshotOptions, Vault, type VaultOptions } from "@quire/bridge";
 import { buildLinkGraph } from "./links.js";
+import { isRequestAllowed, isSafeDocPath } from "./security.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
 
@@ -15,6 +16,11 @@ export interface QuireServerOptions extends VaultOptions {
   webRoot?: string;
   /** Periodic git snapshots. Disabled when the vault is not a git repository. */
   git?: GitSnapshotOptions | false;
+  /**
+   * Extra hostnames permitted to reach this server, beyond loopback. Set this only when
+   * deliberately exposing the vault, e.g. through a tunnel.
+   */
+  allowedHosts?: string[];
 }
 
 const MIME: Record<string, string> = {
@@ -28,11 +34,14 @@ const MIME: Record<string, string> = {
 export class QuireServer {
   /** Identifies this process's document lineage; see Room.add. */
   readonly epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  private readonly rooms = new Map<string, Room>();
+  /** Live rooms by document path. Exposed for tests and for embedding hosts. */
+  readonly rooms = new Map<string, Room>();
   private http: Server | null = null;
   private wss: WebSocketServer | null = null;
 
   readonly git: GitSnapshotter | null;
+  /** Whether the vault is a git repository, so the UI can hide snapshotting when it is not. */
+  private gitReady = false;
 
   private constructor(
     readonly vault: Vault,
@@ -45,7 +54,8 @@ export class QuireServer {
     const vault = await Vault.open(options);
     const server = new QuireServer(vault, options);
     await server.listen();
-    if (server.git && (await server.git.isRepo())) server.git.start();
+    server.gitReady = Boolean(server.git && (await server.git.isRepo()));
+    if (server.gitReady) server.git?.start();
     return server;
   }
 
@@ -73,12 +83,21 @@ export class QuireServer {
     const wss = new WebSocketServer({ noServer: true });
 
     http.on("upgrade", (req, socket, head) => {
-      const url = new URL(req.url ?? "/", "http://localhost");
-      const path = url.searchParams.get("doc");
-      if (url.pathname !== "/sync" || !path) {
+      const reject = (status: string): void => {
+        socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
         socket.destroy();
-        return;
+      };
+
+      if (!isRequestAllowed(req, { allowedHosts: this.opts.allowedHosts ?? [] })) {
+        return reject("403 Forbidden");
       }
+
+      const url = new URL(req.url ?? "/", "http://localhost");
+      if (url.pathname !== "/sync") return reject("404 Not Found");
+
+      const path = url.searchParams.get("doc");
+      if (!path || !isSafeDocPath(path)) return reject("400 Bad Request");
+
       wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws));
     });
 
@@ -91,6 +110,12 @@ export class QuireServer {
   }
 
   private async onRequest(req: IncomingMessage, res: import("node:http").ServerResponse): Promise<void> {
+    if (!isRequestAllowed(req, { allowedHosts: this.opts.allowedHosts ?? [] })) {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      res.end("Forbidden: this Quire server only answers its own origin.");
+      return;
+    }
+
     const url = new URL(req.url ?? "/", "http://localhost");
 
     const json = (body: unknown, status = 200): void => {
@@ -99,7 +124,7 @@ export class QuireServer {
     };
 
     if (url.pathname === "/api/files") {
-      json({ files: this.vault.list(), epoch: this.epoch });
+      json({ files: this.vault.list(), epoch: this.epoch, git: this.gitReady });
       return;
     }
 
@@ -107,11 +132,12 @@ export class QuireServer {
       const query = url.searchParams.get("q") ?? "";
       const limit = Number(url.searchParams.get("limit") ?? 60);
       const viaRipgrep = await searchVault(this.vault.root, query, limit);
-      if (viaRipgrep.engine === "ripgrep" && viaRipgrep.results.length > 0) {
+      if (viaRipgrep.engine === "ripgrep") {
+        // Trust an empty ripgrep result. Re-scanning every document because a query
+        // legitimately matched nothing turned the common case into the slow path.
         json({ results: viaRipgrep.results });
         return;
       }
-      // Fall back to the live CRDT contents, which also covers unsaved state.
       json({ results: searchDocuments(this.documents(), query, limit) });
       return;
     }

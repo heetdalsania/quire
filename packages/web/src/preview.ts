@@ -1,5 +1,15 @@
 import { marked } from "marked";
-import mermaid from "mermaid";
+import type { Mermaid } from "mermaid";
+
+/**
+ * Mermaid is ~900 KB and most documents contain no diagrams, so it is loaded on first
+ * use rather than shipped in the initial bundle.
+ */
+let mermaidModule: Promise<Mermaid> | null = null;
+const loadMermaid = (): Promise<Mermaid> => {
+  mermaidModule ??= import("mermaid").then((m) => m.default);
+  return mermaidModule;
+};
 
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 let mermaidTheme: "dark" | "default" | null = null;
@@ -9,11 +19,14 @@ let mermaidTheme: "dark" | "default" | null = null;
  * viewer switched to dark keeps dark-on-dark arrows. Re-initialise whenever the scheme
  * no longer matches what we last configured.
  */
-function initMermaid(): void {
+async function initMermaid(): Promise<Mermaid> {
+  const mermaid = await loadMermaid();
   const wanted = darkQuery.matches ? "dark" : "default";
-  if (mermaidTheme === wanted) return;
-  mermaid.initialize({ startOnLoad: false, theme: wanted, securityLevel: "strict" });
-  mermaidTheme = wanted;
+  if (mermaidTheme !== wanted) {
+    mermaid.initialize({ startOnLoad: false, theme: wanted, securityLevel: "strict" });
+    mermaidTheme = wanted;
+  }
+  return mermaid;
 }
 
 /** Repaint diagrams when the viewer's colour scheme changes. */
@@ -58,7 +71,7 @@ export async function renderPreview(
   const blocks = [...target.querySelectorAll<HTMLElement>("pre > code.language-mermaid")];
   if (blocks.length === 0) return;
 
-  initMermaid();
+  const mermaid = await initMermaid();
   await Promise.all(
     blocks.map(async (block, index) => {
       const container = block.parentElement;

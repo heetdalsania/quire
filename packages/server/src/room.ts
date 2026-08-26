@@ -14,6 +14,14 @@ const MSG_EPOCH = 2;
 export class Room {
   readonly awareness: Awareness;
   private readonly sockets = new Set<WebSocket>();
+  /**
+   * Which awareness client ids each socket speaks for.
+   *
+   * Presence has to be reaped per socket, not per room. Clearing everything only when
+   * the last peer leaves strands a departed collaborator's avatar on everyone else's
+   * screen for the rest of the session.
+   */
+  private readonly ownedClients = new Map<WebSocket, Set<number>>();
 
   constructor(
     readonly handle: DocHandle,
@@ -31,7 +39,19 @@ export class Room {
 
     this.awareness.on(
       "update",
-      ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+      (
+        { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+        origin: unknown,
+      ) => {
+        // Attribute these ids to the socket that announced them, so they can be reaped
+        // when it goes away.
+        const owner = this.ownedClients.get(origin as WebSocket);
+        if (owner) {
+          for (const id of added) owner.add(id);
+          for (const id of updated) owner.add(id);
+          for (const id of removed) owner.delete(id);
+        }
+
         const changed = [...added, ...updated, ...removed];
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_AWARENESS);
@@ -47,6 +67,7 @@ export class Room {
 
   add(socket: WebSocket): void {
     this.sockets.add(socket);
+    this.ownedClients.set(socket, new Set());
 
     // Epoch first, before any sync traffic.
     //
@@ -102,16 +123,11 @@ export class Room {
 
   private remove(socket: WebSocket): void {
     if (!this.sockets.delete(socket)) return;
-    const ids = [...this.awareness.getStates().keys()].filter(
-      (id) => this.awareness.meta.get(id)?.clock !== undefined && id !== this.handle.doc.clientID,
-    );
-    removeAwarenessStates(this.awareness, ids.filter((id) => !this.hasSocketFor(id)), socket);
-  }
-
-  private hasSocketFor(_clientId: number): boolean {
-    // Presence is reaped on disconnect by the awareness timeout; keeping this explicit
-    // rather than guessing which socket owned which clientID.
-    return this.sockets.size > 0;
+    const owned = this.ownedClients.get(socket);
+    this.ownedClients.delete(socket);
+    if (owned && owned.size > 0) {
+      removeAwarenessStates(this.awareness, [...owned], "disconnect");
+    }
   }
 
   private broadcast(payload: Uint8Array, exclude: unknown): void {
@@ -122,6 +138,7 @@ export class Room {
   }
 
   destroy(): void {
+    this.ownedClients.clear();
     this.awareness.destroy();
     for (const socket of this.sockets) socket.close();
     this.sockets.clear();

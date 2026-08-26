@@ -4,6 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { yCollab } from "y-codemirror.next";
 import { quireEditorTheme, quireHighlight } from "./theme.js";
+import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import {
   attributionExtension,
@@ -57,15 +58,52 @@ const cmtCount = $("#cmt-count");
 
 let view: EditorView | null = null;
 let provider: SyncProvider | null = null;
+let persistence: IndexeddbPersistence | null = null;
 let doc: Y.Doc | null = null;
 let ytext: Y.Text | null = null;
 let comments: Comments | null = null;
 let current: string | null = null;
 let allFiles: string[] = [];
 let links: { backlinks: Record<string, string[]> } = { backlinks: {} };
+/** Server lineage. Local offline state is scoped to it -- see openPersistence. */
+let epoch = "";
+let gitAvailable = false;
 
-const api = async <T,>(path: string, init?: RequestInit): Promise<T> =>
-  (await fetch(path, init)).json() as Promise<T>;
+/**
+ * Offline state is namespaced by server epoch.
+ *
+ * Persisting a document and then merging it into a *restarted* server would recreate the
+ * duplication bug the epoch exists to prevent: the new process re-seeds from disk with a
+ * fresh clientID, and Yjs would concatenate rather than recognise the identical text. So
+ * stores from other epochs are discarded at boot, and unsynced offline edits from a
+ * previous server lifetime are dropped rather than doubled.
+ */
+async function purgeStaleOfflineStores(): Promise<void> {
+  try {
+    const dbs = await indexedDB.databases?.();
+    for (const db of dbs ?? []) {
+      if (db.name?.startsWith("quire:") && !db.name.startsWith(`quire:${epoch}:`)) {
+        indexedDB.deleteDatabase(db.name);
+      }
+    }
+  } catch {
+    // Firefox lacks indexedDB.databases(); stale stores are simply never reused.
+  }
+}
+
+let offline = false;
+
+/** Fetch JSON, surfacing server trouble in the status pill instead of throwing into the void. */
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (!res.ok) throw new Error(`${path} responded ${res.status}`);
+  return (await res.json()) as T;
+}
+
+function setStatus(text: string, live: boolean): void {
+  statusTextEl.textContent = text;
+  statusEl.classList.toggle("live", live);
+}
 
 // ---------------------------------------------------------------- sidebar
 
@@ -112,7 +150,7 @@ searchEl.oninput = () => {
     if (!q) return renderFiles(allFiles);
     const { results } = await api<{ results: Array<{ path: string; line: number; text: string }> }>(
       `/api/search?q=${encodeURIComponent(q)}`,
-    );
+    ).catch(() => ({ results: [] as Array<{ path: string; line: number; text: string }> }));
     const hits = new Map<string, string>();
     for (const r of results) if (!hits.has(r.path)) hits.set(r.path, r.text.trim().slice(0, 80));
     renderFiles([...hits.keys()], hits);
@@ -271,6 +309,7 @@ function renderRail(): void {
 // ---------------------------------------------------------------- document
 
 async function refreshLinks(): Promise<void> {
+  if (offline) return;
   links = await api<{ backlinks: Record<string, string[]> }>("/api/links");
   renderBacklinks();
 }
@@ -295,6 +334,7 @@ async function paintPreview(): Promise<void> {
 async function open(path: string): Promise<void> {
   view?.destroy();
   provider?.destroy();
+  void persistence?.destroy();
   doc?.destroy();
 
   current = path;
@@ -305,9 +345,13 @@ async function open(path: string): Promise<void> {
   const url = new URL(`/sync?doc=${encodeURIComponent(path)}`, location.href);
   url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
 
+  // Local-first: the document is readable and editable from IndexedDB before -- and
+  // without -- a server round trip.
+  persistence = new IndexeddbPersistence(`quire:${epoch}:${path}`, doc);
+
   provider = new SyncProvider(url.toString(), doc, (connected) => {
-    statusTextEl.textContent = connected ? "live" : "offline";
-    statusEl.classList.toggle("live", connected);
+    offline = !connected;
+    setStatus(connected ? "live" : "offline", connected);
   });
   registerLocalAuthor(doc, me.id, me.name, me.color);
   provider.awareness.setLocalStateField("user", { name: me.name, color: me.color, kind: me.kind });
@@ -434,10 +478,46 @@ snapshotBtn.onclick = async () => {
 
 // ---------------------------------------------------------------- boot
 
-allFiles = (await api<{ files: string[] }>("/api/files")).files;
-renderFiles(allFiles);
-await refreshLinks();
-if (allFiles[0]) await open(allFiles[0]);
-else pathEl.textContent = "no markdown files in this folder yet";
-onColorSchemeChange(() => void paintPreview());
-setInterval(() => void refreshLinks(), 15_000);
+// Cmd/Ctrl+K focuses search, Cmd/Ctrl+Shift+A toggles authorship, Escape leaves search.
+window.addEventListener("keydown", (event) => {
+  const mod = event.metaKey || event.ctrlKey;
+  if (mod && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    searchEl.focus();
+    searchEl.select();
+  } else if (mod && event.shiftKey && event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    attrBtn.click();
+  } else if (event.key === "Escape" && document.activeElement === searchEl) {
+    searchEl.value = "";
+    renderFiles(allFiles);
+    view?.focus();
+  }
+});
+
+async function boot(): Promise<void> {
+  try {
+    const info = await api<{ files: string[]; epoch: string; git: boolean }>("/api/files");
+    allFiles = info.files;
+    epoch = info.epoch;
+    gitAvailable = info.git;
+  } catch {
+    setStatus("server unreachable", false);
+    pathEl.textContent = "Cannot reach the Quire server. Is it still running?";
+    return;
+  }
+
+  await purgeStaleOfflineStores();
+  snapshotBtn.hidden = !gitAvailable;
+
+  renderFiles(allFiles);
+  await refreshLinks().catch(() => {});
+
+  if (allFiles[0]) await open(allFiles[0]);
+  else pathEl.textContent = "No Markdown files in this folder yet.";
+
+  onColorSchemeChange(() => void paintPreview());
+  setInterval(() => void refreshLinks().catch(() => {}), 15_000);
+}
+
+await boot();
