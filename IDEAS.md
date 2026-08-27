@@ -1,6 +1,6 @@
 # Quire — Ideas
 
-**Status at a glance:** ideas 1–14 and 16 are **built**. Ideas 15 and 17 are **not built**.
+**Status at a glance:** ideas 1–13 and 16 are **built**. Ideas 14, 15 and 17 are **not built**.
 
 The unbuilt ones lead. What already exists is recorded further down, with notes on where
 the implementation ended up differing from the proposal — those differences are usually the
@@ -15,7 +15,7 @@ Nothing here is committed. PLAN.md §2's deferred list still governs.
 
 ---
 
-# Not built — the growth ideas
+# The growth ideas
 
 A different filter from the ones below: not "is this technically interesting" but **"does
 this make someone show it to another person?"**
