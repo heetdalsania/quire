@@ -59,17 +59,33 @@
       <div id="topbar">
         <span id="docpath"></span>
         <div class="toolgroup">
-          <button id="comment-btn" class="tool" disabled title="Comment on the selected text">
+          <button id="comment-btn" class="tool" aria-label="Comment on selection" disabled title="Comment on the selected text">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /></svg>
             <span>Comment</span>
           </button>
-          <button id="attr-btn" class="tool" aria-pressed="false" title="Tint the text by who wrote it">
+          <button id="attr-btn" class="tool" aria-label="Show who wrote what" aria-pressed="false" title="Tint the text by who wrote it">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 13 13.5H3z" /></svg>
             <span>Authors</span>
           </button>
-          <button id="snapshot-btn" class="tool" title="Commit a git snapshot now">
+          <button id="suggest-btn" class="tool" aria-label="Suggesting mode" aria-pressed="false" title="Suggesting mode: your edits become proposals (Cmd+Shift+S)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5 13.5 5 6 12.5H3.5V10z" /></svg>
+            <span>Suggesting</span>
+          </button>
+          <button id="snapshot-btn" class="tool" aria-label="Commit a git snapshot" title="Commit a git snapshot now">
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" /><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" /></svg>
             <span id="snapshot-label">Snapshot</span>
+          </button>
+          <button id="share-btn" class="tool" aria-label="Share a link" title="Share this vault">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><path d="M5.8 7 10.2 4.6M5.8 9l4.4 2.4"/></svg>
+            <span>Share</span>
+          </button>
+          <button id="export-btn" class="tool" aria-label="Download, print or copy" title="Download, print, or copy">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7.2 8 10.4l3-3.2M2.5 13h11" /></svg>
+            <span>Export</span>
+          </button>
+          <button id="display-btn" class="tool" aria-label="Typography and theme" title="Typography and theme">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12.5 6.6 3.5h1.2l3.6 9M4.6 9.6h5.4M13 12.5V7" /></svg>
+            <span>Display</span>
           </button>
         </div>
         <div id="presence"></div>

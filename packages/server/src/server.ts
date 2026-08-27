@@ -13,7 +13,9 @@ import {
   resolveInstallPath,
   sourceUrl,
 } from "./registry.js";
+import { GithubSearchError, listMarkdown, searchGithub } from "./github.js";
 import { isRequestAllowed, isSafeDocPath } from "./security.js";
+import { ShareRegistry, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
 
@@ -31,6 +33,8 @@ export interface QuireServerOptions extends VaultOptions {
   allowedHosts?: string[];
   /** Path to the registry index. Omit to disable Discover entirely. */
   registryPath?: string;
+  /** Allow live GitHub search from Discover. */
+  githubSearch?: boolean;
 }
 
 const MIME: Record<string, string> = {
@@ -42,6 +46,9 @@ const MIME: Record<string, string> = {
 };
 
 export class QuireServer {
+  /** Capability links. In memory only, so they never outlive the session that made them. */
+  readonly shares = new ShareRegistry();
+
   /** Open server-sent-event streams, used to push vault changes to connected clients. */
   private readonly eventStreams = new Set<import("node:http").ServerResponse>();
 
@@ -129,7 +136,10 @@ export class QuireServer {
       const path = url.searchParams.get("doc");
       if (!path || !isSafeDocPath(path)) return reject("400 Bad Request");
 
-      wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws));
+      const role = this.shares.roleFor(url.searchParams.get("share"), path);
+      if (role === "denied") return reject("403 Forbidden");
+
+      wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws, role));
     });
 
     this.http = http;
@@ -155,7 +165,12 @@ export class QuireServer {
     };
 
     if (url.pathname === "/api/files") {
-      json({ files: this.vault.list(), epoch: this.epoch, git: this.gitReady });
+      json({
+        files: this.vault.list(),
+        epoch: this.epoch,
+        git: this.gitReady,
+        githubSearch: Boolean(this.opts.githubSearch),
+      });
       return;
     }
 
@@ -235,6 +250,89 @@ export class QuireServer {
         json({ path: target });
       } catch (error) {
         json({ error: (error as RegistryFetchError).message }, 502);
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/share" && req.method === "POST") {
+      const role = (url.searchParams.get("role") ?? "view") as ShareRole;
+      if (!["view", "comment", "edit"].includes(role)) return json({ error: "Unknown role" }, 400);
+
+      const path = url.searchParams.get("path");
+      if (path && !isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+
+      const hours = Number(url.searchParams.get("hours") ?? 0);
+      const share = this.shares.create({
+        role,
+        path: path ?? null,
+        ttlMs: hours > 0 ? hours * 3_600_000 : null,
+        label: path ?? "whole vault",
+      });
+      json({ token: share.token, role: share.role, path: share.path, expiresAt: share.expiresAt });
+      return;
+    }
+
+    if (url.pathname === "/api/share" && req.method === "GET") {
+      json({ shares: this.shares.list() });
+      return;
+    }
+
+    if (url.pathname === "/api/share" && req.method === "DELETE") {
+      json({ revoked: this.shares.revoke(url.searchParams.get("token") ?? "") });
+      return;
+    }
+
+    if (url.pathname === "/api/discover/search") {
+      if (!this.opts.githubSearch) return json({ hits: [], available: false });
+      try {
+        json({ hits: await searchGithub(url.searchParams.get("q") ?? ""), available: true });
+      } catch (error) {
+        json({ error: (error as GithubSearchError).message, available: true }, 503);
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/discover/files") {
+      if (!this.opts.githubSearch) return json({ files: [] });
+      try {
+        json({
+          files: await listMarkdown(
+            url.searchParams.get("repo") ?? "",
+            url.searchParams.get("branch") ?? "main",
+          ),
+        });
+      } catch (error) {
+        json({ error: (error as GithubSearchError).message }, 503);
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/discover/install" && req.method === "POST") {
+      const repo = url.searchParams.get("repo") ?? "";
+      const branch = url.searchParams.get("branch") ?? "main";
+      const path = url.searchParams.get("path") ?? "";
+      const target = url.searchParams.get("as") ?? (path.split("/").pop() ?? "");
+
+      if (!this.opts.githubSearch) return json({ error: "GitHub search is disabled" }, 403);
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return json({ error: "Bad repository" }, 400);
+      if (!isSafeDocPath(target) || !/\.(md|markdown)$/i.test(target)) {
+        return json({ error: "Unsafe install path" }, 400);
+      }
+      if (this.vault.list().includes(target)) return json({ error: `${target} already exists` }, 409);
+
+      const entry = {
+        id: `gh:${repo}`, title: target, byline: repo.split("/")[0] ?? "",
+        description: "", category: "", repo, branch, path,
+        installAs: target, license: "See repository", stars: 0,
+      };
+      try {
+        const content = await fetchEntry(entry);
+        const handle = this.vault.getDoc(target);
+        handle.doc.transact(() => handle.text.insert(0, attribute(entry, content)));
+        await this.vault.flush();
+        json({ path: target });
+      } catch (error) {
+        json({ error: (error as Error).message }, 502);
       }
       return;
     }

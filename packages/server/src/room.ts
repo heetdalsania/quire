@@ -2,7 +2,13 @@ import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import type { WebSocket } from "ws";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
-import { readSyncMessage, writeSyncStep1, writeUpdate } from "y-protocols/sync";
+import {
+  messageYjsSyncStep1,
+  readSyncMessage,
+  writeSyncStep1,
+  writeSyncStep2,
+  writeUpdate,
+} from "y-protocols/sync";
 import type { DocHandle } from "@quire/bridge";
 
 const MSG_SYNC = 0;
@@ -22,6 +28,8 @@ export class Room {
    * screen for the rest of the session.
    */
   private readonly ownedClients = new Map<WebSocket, Set<number>>();
+  /** Role each socket connected with. View links are enforced here, not in the UI. */
+  private readonly roles = new Map<WebSocket, "view" | "comment" | "edit">();
 
   constructor(
     readonly handle: DocHandle,
@@ -65,9 +73,10 @@ export class Room {
     return this.sockets.size;
   }
 
-  add(socket: WebSocket): void {
+  add(socket: WebSocket, role: "view" | "comment" | "edit" = "edit"): void {
     this.sockets.add(socket);
     this.ownedClients.set(socket, new Set());
+    this.roles.set(socket, role);
 
     // Epoch first, before any sync traffic.
     //
@@ -110,8 +119,18 @@ export class Room {
 
       if (type === MSG_SYNC) {
         encoding.writeVarUint(encoder, MSG_SYNC);
-        // `socket` as origin keeps the update from being echoed to its sender.
-        readSyncMessage(decoder, encoder, this.handle.doc, socket);
+        if (this.roles.get(socket) === "view") {
+          // Read-only is enforced on the server, not by hiding buttons: a view-link
+          // holder can send whatever they like and none of it lands. Their state
+          // requests are still answered in full, so the document keeps streaming to
+          // them; only their writes are dropped.
+          if (decoding.readVarUint(decoder) === messageYjsSyncStep1) {
+            writeSyncStep2(encoder, this.handle.doc, decoding.readVarUint8Array(decoder));
+          }
+        } else {
+          // `socket` as origin keeps the update from being echoed to its sender.
+          readSyncMessage(decoder, encoder, this.handle.doc, socket);
+        }
         if (encoding.length(encoder) > 1) socket.send(encoding.toUint8Array(encoder));
       } else if (type === MSG_AWARENESS) {
         applyAwarenessUpdate(this.awareness, decoding.readVarUint8Array(decoder), socket);
@@ -122,6 +141,7 @@ export class Room {
   }
 
   private remove(socket: WebSocket): void {
+    this.roles.delete(socket);
     if (!this.sockets.delete(socket)) return;
     const owned = this.ownedClients.get(socket);
     this.ownedClients.delete(socket);
@@ -138,6 +158,7 @@ export class Room {
   }
 
   destroy(): void {
+    this.roles.clear();
     this.ownedClients.clear();
     this.awareness.destroy();
     for (const socket of this.sockets) socket.close();

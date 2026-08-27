@@ -13,7 +13,18 @@ import {
   isAttributionVisible,
   setAttributionVisible,
 } from "./decorations.js";
+import { type DisplaySettings, applySettings, loadSettings, saveSettings } from "./display.js";
 import { type Registry, type RegistryEntry, renderGallery } from "./discover.js";
+import {
+  copyRichText,
+  copyToClipboard,
+  downloadHtml,
+  downloadMarkdown,
+  downloadText,
+  printDocument,
+} from "./export.js";
+import { closeMenu, heading, hint, menuItem, openMenu, row, segmented, slider } from "./menus.js";
+import { configureSuggesting, isSuggesting, setSuggesting, suggestingExtension } from "./suggesting.js";
 import { onColorSchemeChange, renderPreview } from "./preview.js";
 import { SyncProvider } from "./provider.js";
 import {
@@ -55,6 +66,10 @@ const commentBtn = $<HTMLButtonElement>("#comment-btn");
 const attrBtn = $<HTMLButtonElement>("#attr-btn");
 const snapshotBtn = $<HTMLButtonElement>("#snapshot-btn");
 const sugCount = $("#sug-count");
+const suggestBtn = $<HTMLButtonElement>("#suggest-btn");
+const shareBtn = $<HTMLButtonElement>("#share-btn");
+const exportBtn = $<HTMLButtonElement>("#export-btn");
+const displayBtn = $<HTMLButtonElement>("#display-btn");
 const modeVaultBtn = $<HTMLButtonElement>("#mode-vault");
 const modeDiscoverBtn = $<HTMLButtonElement>("#mode-discover");
 const categoriesEl = $("#categories");
@@ -78,6 +93,8 @@ let gitAvailable = false;
 let registry: Registry = { available: false, categories: [], entries: [] };
 let mode: "vault" | "discover" = "vault";
 let activeCategory: string | null = null;
+let githubSearchOn = false;
+let display: DisplaySettings = loadSettings();
 
 /**
  * Offline state is namespaced by server epoch.
@@ -189,8 +206,22 @@ function renderCategories(): void {
   if (activeCategory === null) all.setAttribute("aria-current", "true");
   all.onclick = () => { activeCategory = null; renderCategories(); paintGallery(); };
 
+  const githubCat = document.createElement("button");
+  githubCat.textContent = "Search GitHub";
+  const githubBlurb = document.createElement("small");
+  githubBlurb.textContent = "Everything the index does not cover";
+  githubCat.append(githubBlurb);
+  if (activeCategory === "github") githubCat.setAttribute("aria-current", "true");
+  githubCat.onclick = () => {
+    activeCategory = "github";
+    renderCategories();
+    searchEl.focus();
+    paintGallery();
+  };
+
   categoriesEl.replaceChildren(
     all,
+    ...(githubSearchOn ? [githubCat] : []),
     ...registry.categories.map((cat) => {
       const button = document.createElement("button");
       button.textContent = cat.label;
@@ -204,7 +235,94 @@ function renderCategories(): void {
   );
 }
 
+interface GithubHit {
+  id: string; title: string; byline: string; description: string;
+  repo: string; branch: string; stars: number; license: string; updated: string; source: string;
+}
+
+/**
+ * Live GitHub search, for everything the curated index does not cover.
+ * Repository search works without a token, so this needs no account.
+ */
+async function searchGithubAndRender(query: string): Promise<void> {
+  galleryEl.replaceChildren(Object.assign(document.createElement("p"), {
+    className: "empty-note",
+    textContent: `Searching GitHub for "${query}"…`,
+  }));
+  try {
+    const res = await fetch(`/api/discover/search?q=${encodeURIComponent(query)}`);
+    const body = (await res.json()) as { hits?: GithubHit[]; error?: string };
+    if (body.error) throw new Error(body.error);
+    const hits = body.hits ?? [];
+    if (hits.length === 0) {
+      galleryEl.replaceChildren(Object.assign(document.createElement("p"), {
+        className: "empty-note",
+        textContent: "No repositories matched. Try broader words.",
+      }));
+      return;
+    }
+    renderGallery(
+      galleryEl,
+      { available: true, categories: [], entries: hits.map((h) => ({ ...h, category: "github", installAs: "" })) },
+      { category: null, query: "" },
+      {
+        installed: () => false,
+        onPreview: (entry) => void browseRepo(entry as unknown as GithubHit),
+        onInstall: (entry) => void browseRepo(entry as unknown as GithubHit),
+      },
+    );
+  } catch (error) {
+    galleryEl.replaceChildren(Object.assign(document.createElement("p"), {
+      className: "empty-note",
+      textContent: (error as Error).message,
+    }));
+  }
+}
+
+/** A repository is not a document, so pick which Markdown file to bring across. */
+async function browseRepo(hit: GithubHit): Promise<void> {
+  toast(`Listing Markdown in ${hit.repo}…`);
+  try {
+    const res = await fetch(
+      `/api/discover/files?repo=${encodeURIComponent(hit.repo)}&branch=${encodeURIComponent(hit.branch)}`,
+    );
+    const body = (await res.json()) as { files?: Array<{ path: string; size: number }>; error?: string };
+    if (body.error) throw new Error(body.error);
+    const files = body.files ?? [];
+    closeMenu();
+    if (files.length === 0) return toast("No Markdown files at that repository's root.", true);
+
+    openMenu(galleryEl, (panel) => {
+      panel.append(heading(hit.repo));
+      for (const file of files.slice(0, 14)) {
+        panel.append(menuItem(file.path, `${Math.max(1, Math.round(file.size / 1024))} KB`, async () => {
+          try {
+            const params = new URLSearchParams({ repo: hit.repo, branch: hit.branch, path: file.path });
+            const result = await api<{ path?: string; error?: string }>(
+              `/api/discover/install?${params}`, { method: "POST" },
+            );
+            if (!result.path) throw new Error(result.error ?? "Install failed");
+            toast(`Saved to ${result.path}`);
+            setMode("vault");
+            await open(result.path);
+          } catch (error) {
+            toast((error as Error).message, true);
+          }
+        }));
+      }
+      panel.append(hint("Files come straight from the repository. Quire records where each one came from."));
+    });
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
 function paintGallery(): void {
+  const query = searchEl.value.trim();
+  if (query.length >= 3 && githubSearchOn && activeCategory === "github") {
+    void searchGithubAndRender(query);
+    return;
+  }
   renderGallery(galleryEl, registry, { category: activeCategory, query: searchEl.value }, {
     installed: (entry) => allFiles.includes(entry.installAs),
     onPreview: (entry) => void previewEntry(entry),
@@ -462,6 +580,8 @@ async function open(path: string): Promise<void> {
   comments = new CommentStore(doc);
 
   const url = new URL(`/sync?doc=${encodeURIComponent(path)}`, location.href);
+  const shareToken = new URLSearchParams(location.search).get("share");
+  if (shareToken) url.searchParams.set("share", shareToken);
   url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
 
   // Local-first: the document is readable and editable from IndexedDB before -- and
@@ -473,6 +593,7 @@ async function open(path: string): Promise<void> {
     setStatus(connected ? "live" : "offline", connected);
   });
   registerLocalAuthor(doc, me.id, me.name, me.color);
+  configureSuggesting(ytext, { id: me.id, name: me.name, color: me.color, kind: "human" });
   provider.awareness.setLocalStateField("user", { name: me.name, color: me.color, kind: me.kind });
   provider.awareness.on("change", () => { renderPresence(); renderRail(); });
   comments.yarray.observeDeep(renderRail);
@@ -489,6 +610,7 @@ async function open(path: string): Promise<void> {
         quireHighlight,
         EditorView.lineWrapping,
         yCollab(ytext, provider.awareness),
+        suggestingExtension(),
         attributionTheme,
         attributionExtension(ytext, renderRail),
         EditorView.updateListener.of((u) => {
@@ -579,6 +701,145 @@ commentBtn.onclick = () => {
   if (!sel.empty) openComposer(sel.from, sel.to);
 };
 
+suggestBtn.onclick = () => {
+  const next = !isSuggesting();
+  setSuggesting(next);
+  suggestBtn.setAttribute("aria-pressed", String(next));
+  toast(next
+    ? "Suggesting: your edits become proposals and stay off disk until accepted."
+    : "Editing directly again.");
+};
+
+exportBtn.onclick = () => {
+  openMenu(exportBtn, (panel) => {
+    const path = current ?? "document.md";
+    const text = () => (ytext ? committedTextOf(ytext) : "");
+    panel.append(
+      heading("Download"),
+      menuItem("Markdown", ".md", () => downloadMarkdown(path, text())),
+      menuItem("HTML", "self-contained", () => downloadHtml(path, previewEl.innerHTML)),
+      menuItem("Plain text", ".txt", () => downloadText(path, text())),
+      document.createElement("hr"),
+      heading("Copy"),
+      menuItem("Copy Markdown", "", () => void copyToClipboard(text()).then(() => toast("Markdown copied"))),
+      menuItem("Formatted", "paste into Docs", () =>
+        void copyRichText(previewEl.innerHTML, text()).then(() => toast("Copied with formatting"))),
+      document.createElement("hr"),
+      menuItem("Print", "or save as PDF", () => printDocument()),
+    );
+  });
+};
+
+shareBtn.onclick = () => {
+  openMenu(shareBtn, (panel) => {
+    panel.append(heading("Share a link"));
+
+    let role: "view" | "comment" | "edit" = "view";
+    panel.append(row("Access", segmented(
+      [
+        { value: "view" as const, label: "View" },
+        { value: "comment" as const, label: "Comment" },
+        { value: "edit" as const, label: "Edit" },
+      ],
+      role,
+      (value) => { role = value; },
+    )));
+
+    let scoped = true;
+    panel.append(row("Scope", segmented(
+      [{ value: "doc" as const, label: "This file" }, { value: "all" as const, label: "Whole vault" }],
+      "doc",
+      (value) => { scoped = value === "doc"; },
+    )));
+
+    const create = document.createElement("button");
+    create.className = "menu-item";
+    create.textContent = "Create link";
+    const field = document.createElement("div");
+    field.className = "share-field";
+    field.hidden = true;
+    const input = document.createElement("input");
+    input.readOnly = true;
+    const copy = document.createElement("button");
+    copy.className = "ghost-sm";
+    copy.textContent = "Copy";
+    field.append(input, copy);
+
+    create.onclick = async () => {
+      try {
+        const params = new URLSearchParams({ role });
+        if (scoped && current) params.set("path", current);
+        const share = await api<{ token: string }>(`/api/share?${params}`, { method: "POST" });
+        const link = new URL(location.href);
+        link.search = "";
+        link.searchParams.set("share", share.token);
+        if (scoped && current) link.searchParams.set("doc", current);
+        input.value = link.toString();
+        field.hidden = false;
+        input.select();
+      } catch (error) {
+        toast((error as Error).message, true);
+      }
+    };
+    copy.onclick = () => void copyToClipboard(input.value).then(() => toast("Link copied"));
+
+    panel.append(create, field, hint(
+      "Anyone with the link gets that access — there are no accounts, so the link is the key. " +
+      "View is enforced by the server. Links die when the server stops.",
+    ));
+  });
+};
+
+displayBtn.onclick = () => {
+  openMenu(displayBtn, (panel) => {
+    const update = (patch: Partial<DisplaySettings>): void => {
+      display = { ...display, ...patch };
+      applySettings(display);
+      saveSettings(display);
+    };
+    panel.append(
+      heading("Reading"),
+      row("Theme", segmented(
+        [
+          { value: "system" as const, label: "Auto" },
+          { value: "light" as const, label: "Light" },
+          { value: "dark" as const, label: "Dark" },
+        ],
+        display.theme,
+        (theme) => update({ theme }),
+      )),
+      row("Prose", segmented(
+        [
+          { value: "serif" as const, label: "Serif" },
+          { value: "sans" as const, label: "Sans" },
+          { value: "mono" as const, label: "Mono" },
+        ],
+        display.proseFont,
+        (proseFont) => update({ proseFont }),
+      )),
+      row("Editor", segmented(
+        [
+          { value: "mono" as const, label: "Mono" },
+          { value: "sans" as const, label: "Sans" },
+          { value: "serif" as const, label: "Serif" },
+        ],
+        display.editorFont,
+        (editorFont) => update({ editorFont }),
+      )),
+      slider("Size", display.fontSize, { min: 13, max: 24, step: 0.5, suffix: "px" },
+        (fontSize) => update({ fontSize })),
+      slider("Leading", display.lineHeight, { min: 1.3, max: 2.2, step: 0.02 },
+        (lineHeight) => update({ lineHeight })),
+      slider("Width", display.measure, { min: 45, max: 100, step: 1, suffix: "ch" },
+        (measure) => update({ measure })),
+      document.createElement("hr"),
+      menuItem(display.focusMode ? "Leave focus mode" : "Focus mode", "just the page",
+        () => update({ focusMode: !display.focusMode })),
+      hint("Display only. Nothing here changes a byte of the file, so two people can read the same document at settings that suit each of them."),
+    );
+  });
+};
+
 attrBtn.onclick = () => {
   const next = !isAttributionVisible();
   setAttributionVisible(view, next);
@@ -607,6 +868,12 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     searchEl.focus();
     searchEl.select();
+  } else if (mod && event.shiftKey && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    suggestBtn.click();
+  } else if (mod && event.key.toLowerCase() === "p") {
+    event.preventDefault();
+    printDocument();
   } else if (mod && event.shiftKey && event.key.toLowerCase() === "a") {
     event.preventDefault();
     attrBtn.click();
@@ -617,12 +884,16 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+applySettings(display);
+suggestBtn.setAttribute("aria-pressed", "false");
+
 async function boot(): Promise<void> {
   try {
-    const info = await api<{ files: string[]; epoch: string; git: boolean }>("/api/files");
+    const info = await api<{ files: string[]; epoch: string; git: boolean; githubSearch: boolean }>("/api/files");
     allFiles = info.files;
     epoch = info.epoch;
     gitAvailable = info.git;
+    githubSearchOn = info.githubSearch;
   } catch {
     setStatus("server unreachable", false);
     pathEl.textContent = "Cannot reach the Quire server. Is it still running?";

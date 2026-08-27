@@ -17,6 +17,7 @@ if (args.includes("--help") || args.includes("-h")) {
                           when deliberately exposing the vault, e.g. via a tunnel.
     --no-git              Disable periodic git snapshots
     --no-discover         Disable the Discover tab (no outbound requests at all)
+    --no-search           Keep the curated index, but disable live GitHub search
 
   Requests are refused unless they come from loopback or an allowed host, so a web page
   you happen to have open cannot reach into your vault.
@@ -55,6 +56,7 @@ const server = await QuireServer.start({
   git: args.includes("--no-git") ? false : {},
   // Discover is index-only: entries are fetched from their own repositories on request.
   ...(args.includes("--no-discover") || !existsSync(registryPath) ? {} : { registryPath }),
+  githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
 });
 
 const count = server.vault.list().length;

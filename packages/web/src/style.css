@@ -46,8 +46,19 @@
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
+:root[data-theme="dark"] {
+  --base: #232136; --surface: #2a273f; --overlay: #393552;
+  --muted: #6e6a86; --subtle: #908caa; --text: #e0def4;
+  --love: #eb6f92; --gold: #f6c177; --rose: #ea9a97;
+  --pine: #3e8fb0; --foam: #9ccfd8; --iris: #c4a7e7;
+  --rule: color-mix(in srgb, var(--text) 14%, transparent);
+  --rule-soft: color-mix(in srgb, var(--text) 8%, transparent);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Rosé Pine Moon */
     --base: #232136;
     --surface: #2a273f;
@@ -281,11 +292,11 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   overflow: auto;
   padding: 34px 40px 80px;
   background: var(--surface);
-  font-family: var(--font-serif);
-  font-size: 16.5px;
-  line-height: 1.72;
+  font-family: var(--prose-font, var(--font-serif));
+  font-size: var(--prose-size, 16.5px);
+  line-height: var(--prose-leading, 1.72);
 }
-#preview > * { max-width: 62ch; }
+#preview > * { max-width: var(--prose-measure, 62ch); }
 #preview :first-child { margin-top: 0; }
 #preview h1, #preview h2, #preview h3, #preview h4 {
   font-family: var(--font-ui);
@@ -586,4 +597,85 @@ body.discovering main, body.discovering #rail { display: none; }
   margin: 0; padding: 22px 18px; height: 100%; overflow: auto;
   font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65;
   color: var(--subtle); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* ── display preferences, focus mode, print ──────────────────────────── */
+
+body.focus-mode #sidebar,
+body.focus-mode #rail,
+body.focus-mode #editor { display: none; }
+body.focus-mode { grid-template-columns: 1fr; }
+body.focus-mode #split { grid-template-columns: 1fr; }
+body.focus-mode #preview { padding: 56px 40px 120px; }
+body.focus-mode #preview > * { margin-left: auto; margin-right: auto; }
+
+.popover {
+  position: absolute; top: 46px; right: 16px; z-index: 40;
+  width: 268px; padding: 14px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--rule); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  animation: rise 0.16s var(--ease);
+}
+.popover h3 {
+  margin: 0 0 11px; font-size: 10.5px; font-weight: 620;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted);
+}
+.popover .row { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; font-size: 12.5px; }
+.popover .row > label { flex: 1; color: var(--subtle); }
+.popover .row output { width: 34px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11.5px; }
+.popover input[type="range"] { width: 108px; accent-color: var(--accent); }
+.popover .seg { display: flex; gap: 2px; padding: 2px; background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: var(--r-sm); }
+.popover .seg button {
+  flex: 1; border: 0; border-radius: 4px; padding: 4px 6px;
+  background: transparent; color: var(--subtle); font-size: 11.5px; font-weight: 540;
+}
+.popover .seg button[aria-pressed="true"] { background: var(--base); color: var(--text); box-shadow: var(--shadow-sm); }
+.popover .menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; border-radius: var(--r-sm); padding: 7px 9px;
+  background: none; color: var(--text); font-size: 13px; text-align: left;
+}
+.popover .menu-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.popover .menu-item small { margin-left: auto; color: var(--muted); font-size: 11px; }
+.popover hr { border: 0; height: 1px; background: var(--rule); margin: 9px 0; }
+.popover .hint { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+.share-field {
+  display: flex; gap: 6px; margin-top: 4px;
+}
+.share-field input {
+  flex: 1; min-width: 0; padding: 5px 8px; font-family: var(--font-mono); font-size: 11px;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: var(--base); color: var(--subtle);
+}
+
+@media print {
+  body { display: block; background: #fff; }
+  #sidebar, #rail, #topbar, #editor, #discover, .toast, .popover { display: none !important; }
+  main, #split { display: block; }
+  #preview {
+    overflow: visible; padding: 0; background: #fff; color: #000;
+    max-width: none; font-size: 11.5pt;
+  }
+  #preview > * { max-width: none; }
+  #preview a { color: #000; text-decoration: underline; }
+  #preview pre, #preview code { background: #f4f4f4; }
+  #preview h1, #preview h2, #preview h3 { break-after: avoid; }
+  #preview pre, #preview blockquote, #preview table { break-inside: avoid; }
+}
+
+/* The toolbar grew past what a narrow window can label. Collapse to icons before the
+   document path is the thing that gets squeezed -- knowing which file you are in matters
+   more than reading "Snapshot". Titles and aria-labels carry the meaning. */
+#docpath { min-width: 7ch; flex: 0 1 auto; }
+.toolgroup { flex: none; }
+
+@media (max-width: 1460px) {
+  .tool span:not(#snapshot-label) { display: none; }
+  .tool { padding: 5px 7px; }
+  #snapshot-label { display: none; }
+}
+@media (max-width: 1080px) {
+  #topbar { gap: 6px; padding: 8px 12px; }
 }
