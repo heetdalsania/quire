@@ -206,3 +206,108 @@ would need real thought.
 **Provenance you can prove**, because it is the one thing here that no competitor can copy
 without rebuilding their entire storage layer — and because the question it answers is only
 going to get louder.
+
+---
+
+# Part II — Ideas aimed at growth
+
+Written after the production pass. The filter here is different from Part I: not "is this
+technically interesting" but **"does this make someone show it to another person?"**
+
+Nothing spreads because it is good. Things spread because they produce a moment worth
+forwarding, or because using them makes a second person necessary. The ideas below are
+sorted by which of those two engines they pull.
+
+---
+
+## Engine 1 — Artefacts people forward
+
+### 13. The receipt ★★★
+**What:** One command turns any document into a shareable page: *"This document is 71%
+human. Written over 3 days. 14 agent contributions, 9 accepted, 5 rejected."* With the
+replay embedded, so a visitor can watch it being written.
+
+**Why it spreads:** It is a *result*, not a tool. People post results. A student posts the
+receipt on an essay; a team puts one at the bottom of an RFC; a newsletter writer puts one
+under a post. Each receipt is a link back, and each one is evidence for the thing only
+Quire can claim.
+
+**Why this is the strongest idea in the document:** every competitor could build an editor.
+None of them can retroactively produce a receipt, because they never recorded the data.
+Provenance already exists — this is the packaging that makes it travel.
+
+**Cost:** Low. A static page generator over data already collected.
+
+---
+
+### 14. `quire replay --gif`
+**What:** Extend `tools/recorder` to render a document's replay as a GIF from the command
+line.
+
+**Why it spreads:** The recorder already produces the project's best asset. Turning it on
+*the user's own document* means every user can generate the artefact that sold them on it.
+"Here's my spec being written" is a post; "here's a markdown editor" is not.
+
+**Cost:** Low — the recorder exists, pointed at a replay instead of a scripted demo.
+
+---
+
+### 15. Agent scoreboard
+**What:** Vault-wide stats over time: acceptance rate per agent, per model, per section.
+*"Claude's suggestions on specs are accepted 78% of the time; on runbooks, 34%."*
+
+**Why it spreads:** Nobody can currently answer "is my agent actually any good at this?"
+with data. The first tool to answer it becomes the thing people cite. Aggregate anonymised
+numbers, published quarterly, would be genuinely novel research — and research gets linked
+far more than software does.
+
+**Cost:** Medium. The data exists in runs and suggestion outcomes; the work is aggregation
+and honest presentation.
+
+---
+
+## Engine 2 — Using it requires a second person
+
+### 16. Review requests as the primary verb ★★
+**What:** "Request review" produces a link that opens the document in comment mode with a
+short brief. The reviewer needs no account and installs nothing.
+
+**Why it spreads:** This is the Google Docs growth loop, and it works because the *inviter*
+does the work of recruiting. Every review request is a demo delivered by a colleague rather
+than by marketing. Quire already has capability links and comment mode; this is packaging
+them into a verb.
+
+**Cost:** Low, and it is the highest-leverage growth mechanic available.
+
+---
+
+### 17. The vault as an MCP resource other people can hold
+**What:** Publish a read-only MCP endpoint for a vault, so someone else's agent can consult
+your documents without a copy.
+
+**Why it spreads:** It makes Quire infrastructure rather than an app. A team that exposes
+its specs this way has made every agent-using colleague a Quire user by necessity.
+
+**Cost:** Medium. The MCP layer exists; this is scoping and a public transport.
+
+---
+
+## The one I would build first
+
+**The receipt (#13).** It is low cost, it exploits the one asset no competitor can
+retrofit, and it converts every document into an advertisement produced by the person who
+wrote it. The demo GIF gets you one launch; receipts get you a launch per document.
+
+Second: **review requests (#16)**, because it is the only idea here where using the product
+*requires* introducing it to someone else.
+
+---
+
+## What will not make this spread
+
+- **More features.** The feature list is already longer than most competitors'. Length is
+  not the constraint.
+- **A hosted version.** It removes friction that is not currently the bottleneck, and adds
+  cost, compliance and on-call.
+- **Being cheaper.** Everything in this category is already free.
+- **A better editor.** Editors are a commodity. The provenance record is not.
