@@ -6,7 +6,11 @@
     "types": [
       "node"
     ],
-    "composite": true
+    "composite": true,
+    "lib": [
+      "ES2023",
+      "DOM"
+    ]
   },
   "include": [
     "src/**/*.ts",

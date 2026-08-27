@@ -92,12 +92,21 @@
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7.2 8 10.4l3-3.2M2.5 13h11" /></svg>
             <span>Export</span>
           </button>
+          <button id="insight-btn" class="tool" aria-label="Provenance, replay and agent policy" title="Provenance, replay, agent policy">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.4 1.6"/></svg>
+          </button>
           <button id="display-btn" class="tool" aria-label="Typography and theme" title="Typography and theme">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12.5 6.6 3.5h1.2l3.6 9M4.6 9.6h5.4M13 12.5V7" /></svg>
             <span>Display</span>
           </button>
         </div>
         <div id="presence"></div>
+      </div>
+
+      <div id="replay-bar" hidden>
+        <button id="replay-close" class="panel-close" aria-label="Close replay"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+        <input id="replay-range" type="range" min="0" max="0" value="0" step="1" aria-label="Replay position" />
+        <span id="replay-label"></span>
       </div>
 
       <div id="split">

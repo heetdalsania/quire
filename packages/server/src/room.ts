@@ -9,12 +9,16 @@ import {
   writeSyncStep2,
   writeUpdate,
 } from "y-protocols/sync";
-import type { DocHandle } from "@quire/bridge";
+import { AgentBudget, type DocHandle, measureUpdate, readPolicy } from "@quire/bridge";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
 /** Server -> client only: identifies the document state lineage. See Room.add. */
 const MSG_EPOCH = 2;
+/** Server -> client: a human-readable refusal, e.g. an exhausted agent budget. */
+const MSG_NOTICE = 3;
+const SYNC_STEP_2 = 1;
+const SYNC_UPDATE = 2;
 
 /** One collaborative session over a single document. */
 export class Room {
@@ -30,6 +34,8 @@ export class Room {
   private readonly ownedClients = new Map<WebSocket, Set<number>>();
   /** Role each socket connected with. View links are enforced here, not in the UI. */
   private readonly roles = new Map<WebSocket, "view" | "comment" | "edit">();
+  /** Sockets that identified themselves as agents, with their spend so far. */
+  private readonly budgets = new Map<WebSocket, AgentBudget>();
 
   constructor(
     readonly handle: DocHandle,
@@ -73,10 +79,12 @@ export class Room {
     return this.sockets.size;
   }
 
-  add(socket: WebSocket, role: "view" | "comment" | "edit" = "edit"): void {
+  add(socket: WebSocket, role: "view" | "comment" | "edit" = "edit", isAgent = false): void {
     this.sockets.add(socket);
     this.ownedClients.set(socket, new Set());
     this.roles.set(socket, role);
+    // Agents get a leash. Humans do not: a person deleting a lot of text meant to.
+    if (isAgent) this.budgets.set(socket, new AgentBudget(readPolicy(this.handle.doc)));
 
     // Epoch first, before any sync traffic.
     //
@@ -128,6 +136,25 @@ export class Room {
             writeSyncStep2(encoder, this.handle.doc, decoding.readVarUint8Array(decoder));
           }
         } else {
+          const budget = this.budgets.get(socket);
+          if (budget) {
+            const verdict = this.admitAgentUpdate(socket, budget, message);
+            if (!verdict.allowed) {
+              // Tell the agent why, so it can fall back to proposing rather than
+              // silently believing its edit landed.
+              socket.send(
+                encoding.toUint8Array(
+                  (() => {
+                    const notice = encoding.createEncoder();
+                    encoding.writeVarUint(notice, MSG_NOTICE);
+                    encoding.writeVarString(notice, verdict.reason ?? "Refused");
+                    return notice;
+                  })(),
+                ),
+              );
+              return;
+            }
+          }
           // `socket` as origin keeps the update from being echoed to its sender.
           readSyncMessage(decoder, encoder, this.handle.doc, socket);
         }
@@ -140,8 +167,33 @@ export class Room {
     }
   }
 
+  /**
+   * Weigh an agent's update against its leash.
+   *
+   * The message is re-decoded rather than inspected mid-parse: readSyncMessage consumes
+   * the decoder, and a budget check that only runs after the write has landed is not a
+   * budget at all.
+   */
+  private admitAgentUpdate(
+    socket: WebSocket,
+    budget: AgentBudget,
+    message: Uint8Array,
+  ): { allowed: boolean; reason?: string } {
+    budget.update(readPolicy(this.handle.doc));
+    try {
+      const peek = decoding.createDecoder(message);
+      decoding.readVarUint(peek); // MSG_SYNC
+      const syncType = decoding.readVarUint(peek);
+      if (syncType !== SYNC_STEP_2 && syncType !== SYNC_UPDATE) return { allowed: true };
+      return budget.admit(measureUpdate(decoding.readVarUint8Array(peek)));
+    } catch {
+      return { allowed: false, reason: "Malformed update" };
+    }
+  }
+
   private remove(socket: WebSocket): void {
     this.roles.delete(socket);
+    this.budgets.delete(socket);
     if (!this.sockets.delete(socket)) return;
     const owned = this.ownedClients.get(socket);
     this.ownedClients.delete(socket);
@@ -158,6 +210,7 @@ export class Room {
   }
 
   destroy(): void {
+    this.budgets.clear();
     this.roles.clear();
     this.ownedClients.clear();
     this.awareness.destroy();

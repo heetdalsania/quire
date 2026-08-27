@@ -2,13 +2,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  ATTR_RUN,
   type Author,
   CommentStore,
   committedText,
   insertAttributed,
+  isRangeLocked,
+  knownAuthors,
   pendingSuggestions,
   proposeDelete,
+  readPolicy,
+  runAt,
+  sections,
   spans,
+  summarise,
+  writePolicy,
 } from "@quire/bridge";
 import { AgentSession } from "./session.js";
 
@@ -17,6 +25,15 @@ export interface McpOptions {
   serverUrl: string;
   agentName: string;
   agentColor: string;
+  /** Model identifier recorded in provenance, e.g. "claude-opus-5". */
+  model?: string;
+  /**
+   * A role this agent plays, e.g. "editor" or "fact-checker". Several agents can hold a
+   * document at once; the role is what makes their cursors and spans legible.
+   */
+  role?: string;
+  /** Defer to a human whose cursor is inside the range being edited. */
+  polite?: boolean;
 }
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
@@ -24,10 +41,35 @@ const fail = (text: string) => ({ content: [{ type: "text" as const, text }], is
 
 export async function createQuireMcpServer(options: McpOptions): Promise<McpServer> {
   const author: Author = {
-    id: `agent-${options.agentName.toLowerCase().replace(/\W+/g, "-")}`,
-    name: options.agentName,
+    id: `agent-${options.agentName.toLowerCase().replace(/\W+/g, "-")}${options.role ? `-${options.role}` : ""}`,
+    name: options.role ? `${options.agentName} (${options.role})` : options.agentName,
     color: options.agentColor,
     kind: "agent",
+  };
+  const model = options.model ?? null;
+
+  /**
+   * The politeness protocol.
+   *
+   * Nothing else that edits files can do this: it needs to see where a person's cursor is,
+   * live. Rather than colliding with someone mid-sentence, an edit inside their working
+   * range becomes a suggestion they can take or leave.
+   */
+  const yieldToHuman = (
+    session: AgentSession,
+    from: number,
+    to: number,
+  ): { defer: boolean; who?: string } => {
+    if (options.polite === false) return { defer: false };
+    const near = session.humanCursors().find((c) => c.index >= from - 120 && c.index <= to + 120);
+    return near ? { defer: true, who: near.name } : { defer: false };
+  };
+
+  /** Refuse an edit that lands in a section the document has locked against agents. */
+  const checkLock = (session: AgentSession, from: number, to: number): string | null => {
+    const policy = readPolicy(session.doc);
+    const hit = isRangeLocked(session.text.toString(), policy.lockedSections, from, to);
+    return hit ? `"${hit.heading}" is locked against agent edits in this document.` : null;
   };
 
   const sessions = new Map<string, AgentSession>();
@@ -125,9 +167,13 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         old_text: z.string().describe("Exact text to replace. Must occur exactly once."),
         new_text: z.string(),
         suggest: z.boolean().optional().describe("Propose the change instead of applying it."),
+        reason: z
+          .string()
+          .optional()
+          .describe("Why this edit is being made. Recorded with the span so a reader can ask later."),
       },
     },
-    guard(async ({ path, old_text, new_text, suggest }: { path: string; old_text: string; new_text: string; suggest?: boolean | undefined }) => {
+    guard(async ({ path, old_text, new_text, suggest, reason }: { path: string; old_text: string; new_text: string; suggest?: boolean | undefined; reason?: string | undefined }) => {
       const session = await join(path);
       const current = session.text.toString();
 
@@ -137,7 +183,17 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         return fail(`old_text occurs more than once in ${path}; include more context`);
       }
 
-      const suggestionId = suggest ? `s_${Date.now().toString(36)}` : undefined;
+      const locked = checkLock(session, first, first + old_text.length);
+      if (locked) return fail(locked);
+
+      const policy = readPolicy(session.doc);
+      if (policy.mode === "read-only") return fail("This document is read-only for agents.");
+
+      const yielded = yieldToHuman(session, first, first + old_text.length);
+      const forced = policy.mode === "propose" || yielded.defer;
+      const suggestionId = suggest || forced ? `s_${Date.now().toString(36)}` : undefined;
+
+      const runId = session.beginRun("edit_document", reason ?? null, model);
       session.announce({ anchor: first, head: first + old_text.length });
 
       if (suggestionId) {
@@ -147,15 +203,24 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         }
         insertAttributed(session.text, first + old_text.length, new_text, author, {
           suggestion: suggestionId,
+          run: runId,
         });
       } else {
         session.doc.transact(() => {
           session.text.delete(first, old_text.length);
         }, `author:${author.id}`);
-        insertAttributed(session.text, first, new_text, author);
+        insertAttributed(session.text, first, new_text, author, { run: runId });
       }
 
       await session.settle();
+      const refused = session.notices.splice(0).join(" ");
+      if (refused) return fail(refused);
+
+      if (yielded.defer) {
+        return ok(
+          `${yielded.who} is working right there, so this went in as suggestion ${suggestionId} rather than editing over them.`,
+        );
+      }
       return ok(
         suggestionId
           ? `Proposed change to ${path} as suggestion ${suggestionId}. It is visible in the editor and awaiting review; the file on disk is unchanged.`
@@ -282,6 +347,238 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       insertAttributed(session.text, 0, content ?? `# ${path.replace(/\.md$/i, "")}\n\n`, author);
       await session.settle();
       return ok(`Created ${path}.`);
+    }),
+  );
+
+
+  server.registerTool(
+    "document_provenance",
+    {
+      title: "Who wrote this document",
+      description:
+        "Report how much of a document each human and agent actually wrote, counted from " +
+        "marks laid down at write time rather than guessed from the prose.",
+      inputSchema: { path: z.string() },
+    },
+    guard(async ({ path }: { path: string }) => {
+      const session = await join(path);
+      const summary = summarise(session.doc, session.text, knownAuthors(session.doc) as never);
+      if (summary.totalChars === 0) return ok("Document is empty.");
+      const lines = summary.byAuthor.map(
+        (a) => `  ${(a.share * 100).toFixed(1).padStart(5)}%  ${a.name} (${a.kind}, ${a.chars} chars)`,
+      );
+      return ok(
+        `${path}\n  human ${(summary.humanShare * 100).toFixed(1)}%  agent ${(summary.agentShare * 100).toFixed(1)}%  unattributed ${(summary.unattributedShare * 100).toFixed(1)}%\n${lines.join("\n")}`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    "why_does_this_exist",
+    {
+      title: "Explain a passage's origin",
+      description:
+        "Given an exact quote, report which author and which run produced it, including the " +
+        "instruction that caused it when one was recorded.",
+      inputSchema: { path: z.string(), quote: z.string() },
+    },
+    guard(async ({ path, quote }: { path: string; quote: string }) => {
+      const session = await join(path);
+      const at = session.text.toString().indexOf(quote);
+      if (at === -1) return fail(`quote not found in ${path}`);
+
+      const found = runAt(session.doc, session.text, at);
+      if (!found?.run) return ok("No recorded origin: written before provenance, or by hand.");
+      const { run } = found;
+      return ok(
+        [
+          `author: ${run.authorId}`,
+          `model:  ${run.model ?? "(not recorded)"}`,
+          `tool:   ${run.tool ?? "(not recorded)"}`,
+          `when:   ${new Date(run.startedAt).toISOString()}`,
+          `why:    ${run.prompt ?? "(no reason recorded)"}`,
+        ].join("\n"),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "get_agent_policy",
+    {
+      title: "Read this document's agent policy",
+      description:
+        "Report the leash on agents for a document: edit mode, insert and delete budgets, " +
+        "and any sections locked against agent edits. These are enforced by the server, " +
+        "so an agent cannot exceed them by ignoring this.",
+      inputSchema: { path: z.string() },
+    },
+    guard(async ({ path }: { path: string }) => {
+      const session = await join(path);
+      const policy = readPolicy(session.doc);
+      const headings = sections(session.text.toString()).map((s) => s.heading);
+      return ok(
+        [
+          `mode:           ${policy.mode}`,
+          `insert budget:  ${policy.maxInserts} characters per session`,
+          `delete budget:  ${policy.maxDeletes} characters per session`,
+          `locked:         ${policy.lockedSections.join(", ") || "(none)"}`,
+          `sections here:  ${headings.join(", ") || "(none)"}`,
+        ].join("\n"),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "set_agent_policy",
+    {
+      title: "Set this document's agent policy",
+      description:
+        "Constrain what agents may do to this document. Use it to lock sections before " +
+        "handing a document to another agent, or to drop a document to propose-only.",
+      inputSchema: {
+        path: z.string(),
+        mode: z.enum(["edit", "propose", "read-only"]).optional(),
+        max_inserts: z.number().optional(),
+        max_deletes: z.number().optional(),
+        locked_sections: z.array(z.string()).optional(),
+      },
+    },
+    guard(
+      async ({
+        path,
+        mode,
+        max_inserts,
+        max_deletes,
+        locked_sections,
+      }: {
+        path: string;
+        mode?: "edit" | "propose" | "read-only" | undefined;
+        max_inserts?: number | undefined;
+        max_deletes?: number | undefined;
+        locked_sections?: string[] | undefined;
+      }) => {
+        const session = await join(path);
+        const next = writePolicy(session.doc, {
+          ...(mode ? { mode } : {}),
+          ...(max_inserts !== undefined ? { maxInserts: max_inserts } : {}),
+          ...(max_deletes !== undefined ? { maxDeletes: max_deletes } : {}),
+          ...(locked_sections ? { lockedSections: locked_sections } : {}),
+        });
+        await session.settle();
+        return ok(`Policy for ${path}: ${next.mode}, +${next.maxInserts}/-${next.maxDeletes}, locked: ${next.lockedSections.join(", ") || "none"}`);
+      },
+    ),
+  );
+
+  server.registerTool(
+    "list_assignments",
+    {
+      title: "List comments assigned to me",
+      description:
+        "Comment threads a human has assigned to an agent. Work through these and reply " +
+        "with a suggestion rather than editing directly.",
+      inputSchema: { path: z.string().optional() },
+    },
+    guard(async ({ path }: { path?: string | undefined }) => {
+      const paths = path ? [path] : await listFiles();
+      const out: string[] = [];
+      for (const p of paths) {
+        const session = await join(p);
+        for (const thread of new CommentStore(session.doc).list()) {
+          if (!thread.assignedTo || thread.resolved) continue;
+          out.push(`${p} :: ${thread.id} :: on ${JSON.stringify(thread.quote)} :: ${thread.body}`);
+        }
+      }
+      return ok(out.length ? out.join("\n") : "Nothing assigned.");
+    }),
+  );
+
+  server.registerTool(
+    "answer_assignment",
+    {
+      title: "Answer an assigned comment",
+      description:
+        "Respond to an assigned comment by proposing a replacement for the text it is " +
+        "anchored to. The proposal appears beside the thread for a human to accept.",
+      inputSchema: {
+        path: z.string(),
+        thread_id: z.string(),
+        new_text: z.string(),
+        note: z.string().optional(),
+      },
+    },
+    guard(
+      async ({
+        path,
+        thread_id,
+        new_text,
+        note,
+      }: { path: string; thread_id: string; new_text: string; note?: string | undefined }) => {
+        const session = await join(path);
+        const comments = new CommentStore(session.doc);
+        const thread = comments.list().find((t) => t.id === thread_id);
+        if (!thread) return fail(`No comment ${thread_id} in ${path}`);
+        if (!thread.range) return fail("That comment's anchor text has been deleted.");
+
+        const runId = session.beginRun("answer_assignment", note ?? thread.body, model);
+        const suggestionId = `s_${Date.now().toString(36)}`;
+        proposeDelete(session.text, thread.range.from, thread.range.to, author, suggestionId);
+        insertAttributed(session.text, thread.range.to, new_text, author, {
+          suggestion: suggestionId,
+          run: runId,
+        });
+        comments.reply(thread_id, note ?? "Proposed a change.", author.id, author.name);
+        await session.settle();
+        return ok(`Proposed ${suggestionId} against ${thread_id}, and replied on the thread.`);
+      },
+    ),
+  );
+
+  server.registerTool(
+    "vault_overview",
+    {
+      title: "Read the whole vault",
+      description:
+        "Return every document's text at once, for checks that only make sense across " +
+        "documents -- contradictions, drift between a spec and a runbook, duplicated " +
+        "guidance. Report findings with add_comment on the documents involved.",
+      inputSchema: { max_chars: z.number().optional() },
+    },
+    guard(async ({ max_chars }: { max_chars?: number | undefined }) => {
+      const budget = max_chars ?? 120_000;
+      const files = await listFiles();
+      const parts: string[] = [];
+      let used = 0;
+      for (const file of files) {
+        const session = await join(file);
+        const body = committedText(session.text);
+        const chunk = `\n===== ${file} =====\n${body}`;
+        if (used + chunk.length > budget) {
+          parts.push(`\n(truncated: ${files.length - parts.length} documents not shown)`);
+          break;
+        }
+        parts.push(chunk);
+        used += chunk.length;
+      }
+      return ok(parts.join(""));
+    }),
+  );
+
+  server.registerTool(
+    "compare_versions",
+    {
+      title: "Compare a document against text",
+      description:
+        "Return the current document alongside text you supply, so you can describe what " +
+        "changed in meaning rather than in lines -- a weakened claim, a hedge removed, " +
+        "'should' becoming 'must'. Report the reading back as comments.",
+      inputSchema: { path: z.string(), other: z.string(), label: z.string().optional() },
+    },
+    guard(async ({ path, other, label }: { path: string; other: string; label?: string | undefined }) => {
+      const session = await join(path);
+      return ok(
+        `===== ${path} (current) =====\n${committedText(session.text)}\n\n===== ${label ?? "other"} =====\n${other}`,
+      );
     }),
   );
 

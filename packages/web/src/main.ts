@@ -25,6 +25,7 @@ import {
 } from "./export.js";
 import { applyLayout, getLayout, loadLayout, togglePanel, wireResizer } from "./layout.js";
 import { closeMenu, heading, hint, menuItem, openMenu, row, segmented, slider } from "./menus.js";
+import { answerPeer, offerPeer, type PeerHandle } from "./peer.js";
 import { configureSuggesting, isSuggesting, setSuggesting, suggestingExtension } from "./suggesting.js";
 import { onColorSchemeChange, renderPreview } from "./preview.js";
 import { SyncProvider } from "./provider.js";
@@ -71,6 +72,10 @@ const suggestBtn = $<HTMLButtonElement>("#suggest-btn");
 const shareBtn = $<HTMLButtonElement>("#share-btn");
 const exportBtn = $<HTMLButtonElement>("#export-btn");
 const displayBtn = $<HTMLButtonElement>("#display-btn");
+const insightBtn = $<HTMLButtonElement>("#insight-btn");
+const replayBar = $("#replay-bar");
+const replayRange = $<HTMLInputElement>("#replay-range");
+const replayLabel = $("#replay-label");
 const splitEl = $("#split");
 const modeVaultBtn = $<HTMLButtonElement>("#mode-vault");
 const modeDiscoverBtn = $<HTMLButtonElement>("#mode-discover");
@@ -97,6 +102,10 @@ let mode: "vault" | "discover" = "vault";
 let activeCategory: string | null = null;
 let githubSearchOn = false;
 let display: DisplaySettings = loadSettings();
+let execEnabled = false;
+let peer: PeerHandle | null = null;
+const driftByPath = new Map<string, string>();
+let replayFrames: Array<{ at: number; text: string; byAuthor: Record<string, number>; totalChars: number }> = [];
 
 /**
  * Offline state is namespaced by server epoch.
@@ -149,6 +158,14 @@ function renderFiles(files: string[], hits?: Map<string, string>): void {
         const hit = document.createElement("em");
         hit.textContent = hits.get(path)!;
         button.append(hit);
+      }
+      const drift = driftByPath.get(path);
+      if (drift && drift !== "current") {
+        const pill = document.createElement("span");
+        pill.className = "drift-pill";
+        pill.textContent = drift === "upstream-changed" ? "update" : drift === "diverged" ? "diverged" : "edited";
+        pill.title = "Installed from Discover; upstream has moved on";
+        name.append(pill);
       }
       if (path === current) button.setAttribute("aria-current", "true");
       button.onclick = () => void open(path);
@@ -396,6 +413,152 @@ modeDiscoverBtn.onclick = () => {
   setMode("discover");
 };
 
+
+// ---------------------------------------------------------------- insight panel
+
+interface ProvenanceSummary {
+  totalChars: number;
+  byAuthor: Array<{ authorId: string; name: string; kind: string; chars: number; share: number }>;
+  humanShare: number;
+  agentShare: number;
+  unattributedShare: number;
+}
+
+const pct = (n: number): string => `${(n * 100).toFixed(n >= 0.995 || n === 0 ? 0 : 1)}%`;
+
+/**
+ * Provenance, read from marks laid down at write time.
+ *
+ * Every other tool answering "did a person write this?" is guessing from the prose.
+ * Quire watched it being written, so this is a record rather than an estimate.
+ */
+function renderProvenance(panel: HTMLElement, summary: ProvenanceSummary): void {
+  if (summary.totalChars === 0) {
+    panel.append(hint("Nothing written yet."));
+    return;
+  }
+  const headline = document.createElement("p");
+  headline.className = "prov-headline";
+  headline.innerHTML =
+    `<strong>${pct(summary.humanShare)}</strong> human · ` +
+    `<strong>${pct(summary.agentShare)}</strong> agent` +
+    (summary.unattributedShare > 0 ? ` · ${pct(summary.unattributedShare)} unattributed` : "");
+  panel.append(headline);
+
+  const bar = document.createElement("div");
+  bar.className = "prov-bar";
+  for (const author of summary.byAuthor) {
+    const seg = document.createElement("span");
+    seg.style.width = `${author.share * 100}%`;
+    seg.style.background = colourFor(author);
+    seg.title = `${author.name} — ${pct(author.share)}`;
+    bar.append(seg);
+  }
+  panel.append(bar);
+
+  for (const author of summary.byAuthor) {
+    const row_ = document.createElement("div");
+    row_.className = "prov-row";
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = colourFor(author);
+    const name = document.createElement("span");
+    name.textContent = author.name;
+    const share = document.createElement("span");
+    share.className = "pct";
+    share.textContent = pct(author.share);
+    row_.append(swatch, name, share);
+    panel.append(row_);
+  }
+
+  panel.append(hint(
+    "Counted from marks written at the time, not inferred from the text. Text that predates " +
+    "Quire is reported as unattributed rather than credited to anyone.",
+  ));
+}
+
+const colourFor = (author: { authorId: string; kind: string }): string =>
+  authorRegistry.get(author.authorId)?.color ??
+  (author.kind === "agent" ? "var(--gold)" : author.kind === "human" ? "var(--iris)" : "var(--muted)");
+
+async function startReplay(): Promise<void> {
+  if (!current) return;
+  toast("Building replay…");
+  try {
+    const { frames } = await api<{ frames: typeof replayFrames }>(
+      `/api/replay?doc=${encodeURIComponent(current)}&frames=60`,
+    );
+    if (frames.length < 2) return toast("Not enough history to replay this document yet.", true);
+    replayFrames = frames;
+    document.querySelector(".toast")?.remove();
+    replayBar.hidden = false;
+    document.body.classList.add("replaying");
+    replayRange.max = String(frames.length - 1);
+    replayRange.value = String(frames.length - 1);
+    showFrame(frames.length - 1);
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
+function showFrame(index: number): void {
+  const frame = replayFrames[index];
+  if (!frame) return;
+  replayLabel.textContent = `${pct(frame.at)} · ${frame.totalChars} chars`;
+  void renderPreview(previewEl, frame.text, { resolveLink: () => null, onNavigate: () => {} });
+}
+
+replayRange.oninput = () => showFrame(Number(replayRange.value));
+$<HTMLButtonElement>("#replay-close").onclick = () => {
+  replayBar.hidden = true;
+  document.body.classList.remove("replaying");
+  replayFrames = [];
+  void paintPreview();
+};
+
+insightBtn.onclick = () => {
+  openMenu(insightBtn, (panel) => {
+    panel.append(heading("Provenance"));
+    const slot = document.createElement("div");
+    panel.append(slot);
+    slot.append(hint("Reading…"));
+
+    void (async () => {
+      try {
+        const { summary, policy } = await api<{
+          summary: ProvenanceSummary;
+          policy: { mode: string; maxInserts: number; maxDeletes: number; lockedSections: string[] };
+        }>(`/api/provenance?doc=${encodeURIComponent(current ?? "")}`);
+        slot.replaceChildren();
+        renderProvenance(slot, summary);
+
+        panel.append(document.createElement("hr"), heading("Agent leash"));
+        panel.append(row("Agents may", segmented(
+          [
+            { value: "edit" as const, label: "Edit" },
+            { value: "propose" as const, label: "Propose" },
+            { value: "read-only" as const, label: "Read" },
+          ],
+          policy.mode as "edit",
+          (mode) => {
+            void api(`/api/policy?doc=${encodeURIComponent(current ?? "")}&mode=${mode}`, { method: "POST" })
+              .then(() => toast(`Agents may now ${mode === "read-only" ? "only read" : mode} this document.`));
+          },
+        )));
+        panel.append(hint(
+          `Budgets are enforced by the server, not requested in a prompt: ${policy.maxInserts} characters inserted and ${policy.maxDeletes} deleted per agent session.`,
+        ));
+
+        panel.append(document.createElement("hr"));
+        panel.append(menuItem("Replay this document", "watch it being written", () => void startReplay()));
+      } catch (error) {
+        slot.replaceChildren();
+        slot.append(hint((error as Error).message));
+      }
+    })();
+  });
+};
+
 // ---------------------------------------------------------------- presence
 
 /** Merge durable author identities from the document into the render registry. */
@@ -499,11 +662,24 @@ function renderRail(): void {
         const who = document.createElement("div");
         who.className = "who";
         who.textContent = t.orphaned ? `${t.authorName} · anchor deleted` : t.authorName;
+        if (t.assignedTo) {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = "assigned";
+          who.append(chip);
+        }
         const quote = document.createElement("blockquote");
         quote.textContent = t.quote;
         const body = document.createElement("p");
         body.textContent = t.body;
         card.append(who, quote, body);
+
+        for (const reply of t.replies ?? []) {
+          const line = document.createElement("p");
+          line.className = "reply";
+          line.textContent = `${reply.authorName}: ${reply.body}`;
+          card.append(line);
+        }
 
         const actions = document.createElement("div");
         actions.className = "actions";
@@ -513,6 +689,23 @@ function renderRail(): void {
           go.onclick = () => scrollTo(view!, t.range!.from, t.range!.to);
           actions.append(go);
         }
+        // Assigning a thread to an agent is what closes the loop between review and work:
+        // today that round trip means copying context into a chat window by hand.
+        const assign = document.createElement("button");
+        assign.textContent = t.assignedTo ? "Unassign" : "Assign";
+        assign.title = t.assignedTo
+          ? `Assigned to ${t.assignedTo}`
+          : "Hand this thread to an agent, which will answer with a suggestion";
+        assign.onclick = () => {
+          const agents = [...authorRegistry.entries()].filter(([, a]) => a.kind === "agent");
+          if (!t.assignedTo && agents.length === 0) {
+            return toast("No agent has joined this document yet.", true);
+          }
+          comments!.assign(t.id, t.assignedTo ? null : agents[0]![0]);
+          renderRail();
+        };
+        actions.append(assign);
+
         const resolve = document.createElement("button");
         resolve.textContent = t.resolved ? "Reopen" : "Resolve";
         resolve.onclick = () => { comments!.setResolved(t.id, !t.resolved); renderRail(); };
@@ -553,6 +746,54 @@ async function refreshLinks(): Promise<void> {
   renderBacklinks();
 }
 
+/**
+ * Offer to run a fenced code block.
+ *
+ * Only ever on an explicit click, and only when the server was started with --allow-exec.
+ * Opening a document must never run anything, or a document installed from Discover could
+ * execute itself.
+ */
+function attachRunButtons(): void {
+  if (!execEnabled) return;
+  for (const block of previewEl.querySelectorAll<HTMLElement>("pre > code[class*='language-']")) {
+    const language = (block.className.match(/language-(\w+)/)?.[1] ?? "").toLowerCase();
+    if (!["bash", "sh", "shell", "zsh", "python", "python3", "node", "javascript"].includes(language)) continue;
+    const pre = block.parentElement;
+    if (!pre || pre.querySelector(".run-block")) continue;
+
+    const run = document.createElement("button");
+    run.className = "run-block";
+    run.textContent = `Run ${language}`;
+    run.onclick = async () => {
+      run.disabled = true;
+      run.textContent = "Running…";
+      try {
+        const res = await fetch("/api/exec", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ language, source: block.textContent ?? "", path: current }),
+        });
+        const body = (await res.json()) as { markdown?: string; error?: string };
+        if (body.error) throw new Error(body.error);
+        // Record the output in the document, attributed like any other edit.
+        if (ytext && body.markdown) {
+          const source = block.textContent ?? "";
+          const at = ytext.toString().indexOf(source);
+          const insertAt = at === -1 ? ytext.length : at + source.length + 4;
+          ytext.doc?.transact(() => ytext!.insert(Math.min(insertAt, ytext!.length), body.markdown!));
+        }
+        toast("Ran, and recorded the output in the document.");
+      } catch (error) {
+        toast((error as Error).message, true);
+      } finally {
+        run.disabled = false;
+        run.textContent = `Run ${language}`;
+      }
+    };
+    pre.append(run);
+  }
+}
+
 async function paintPreview(): Promise<void> {
   if (!view || !ytext) return;
   // Render the committed projection, so the preview always matches the file on disk
@@ -568,6 +809,7 @@ async function paintPreview(): Promise<void> {
     },
     onNavigate: (path) => void open(path),
   });
+  attachRunButtons();
 }
 
 async function open(path: string): Promise<void> {
@@ -732,6 +974,49 @@ exportBtn.onclick = () => {
   });
 };
 
+
+/**
+ * Direct peer editing. Signalling is a copy-paste, because a signalling server is exactly
+ * the middleman this is meant to avoid.
+ */
+async function startPeerOffer(): Promise<void> {
+  if (!doc) return;
+  peer?.close();
+  try {
+    peer = await offerPeer(doc, (state, detail) => {
+      if (state === "connected") toast("Peer connected. You are editing directly.");
+      else if (state === "failed") toast(detail ?? "Direct connection failed.", true);
+    });
+    await copyToClipboard(peer.invite);
+    const reply = window.prompt(
+      "Invite copied to your clipboard. Send it to the other person, then paste their reply here.",
+    );
+    if (reply?.trim()) {
+      await peer.accept(reply);
+      toast("Reply accepted — connecting…");
+    }
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
+async function joinPeer(): Promise<void> {
+  if (!doc) return;
+  const invite = window.prompt("Paste the invite you were sent:");
+  if (!invite?.trim()) return;
+  try {
+    peer?.close();
+    peer = await answerPeer(doc, invite, (state, detail) => {
+      if (state === "connected") toast("Connected directly to your peer.");
+      else if (state === "failed") toast(detail ?? "Direct connection failed.", true);
+    });
+    await copyToClipboard(peer.invite);
+    toast("Your reply is on the clipboard — send it back to them.");
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
 shareBtn.onclick = () => {
   openMenu(shareBtn, (panel) => {
     panel.append(heading("Share a link"));
@@ -789,6 +1074,10 @@ shareBtn.onclick = () => {
       "Anyone with the link gets that access — there are no accounts, so the link is the key. " +
       "View is enforced by the server. Links die when the server stops.",
     ));
+
+    panel.append(document.createElement("hr"), heading("Direct connection"));
+    panel.append(menuItem("Invite a peer", "no server at all", () => void startPeerOffer()));
+    panel.append(menuItem("Join with an invite", "paste theirs", () => void joinPeer()));
   });
 };
 
@@ -915,11 +1204,12 @@ wireResizer($("#rz-editor"), "editor", splitEl);
 
 async function boot(): Promise<void> {
   try {
-    const info = await api<{ files: string[]; epoch: string; git: boolean; githubSearch: boolean }>("/api/files");
+    const info = await api<{ files: string[]; epoch: string; git: boolean; githubSearch: boolean; exec?: boolean }>("/api/files");
     allFiles = info.files;
     epoch = info.epoch;
     gitAvailable = info.git;
     githubSearchOn = info.githubSearch;
+    execEnabled = info.exec ?? false;
   } catch {
     setStatus("server unreachable", false);
     pathEl.textContent = "Cannot reach the Quire server. Is it still running?";
@@ -930,6 +1220,14 @@ async function boot(): Promise<void> {
   snapshotBtn.hidden = !gitAvailable;
 
   registry = await api<Registry>("/api/registry").catch(() => registry);
+
+  // Which installed documents have drifted from their source.
+  void api<{ documents: Array<{ path: string; state: string }> }>("/api/drift")
+    .then(({ documents }) => {
+      for (const d of documents) driftByPath.set(d.path, d.state);
+      if (documents.some((d) => d.state !== "current")) renderFiles(allFiles);
+    })
+    .catch(() => {});
   modeDiscoverBtn.hidden = !registry.available;
   if (registry.available) {
     discoverNoteEl.textContent = registry.note ?? "";

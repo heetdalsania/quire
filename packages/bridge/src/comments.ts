@@ -1,5 +1,12 @@
 import * as Y from "yjs";
 
+export interface CommentReply {
+  authorId: string;
+  authorName: string;
+  body: string;
+  at: number;
+}
+
 export interface CommentThread {
   id: string;
   authorId: string;
@@ -7,6 +14,14 @@ export interface CommentThread {
   body: string;
   createdAt: number;
   resolved: boolean;
+  /**
+   * Author id this thread is assigned to, usually an agent.
+   *
+   * Assignment is what closes the loop between review and work: today that round trip
+   * means copying context into a chat window and pasting the answer back by hand.
+   */
+  assignedTo: string | null;
+  replies: CommentReply[];
   /** Text the comment was originally attached to, used to explain orphans. */
   quote: string;
   /** Resolved character range, or null if the anchored text is gone. */
@@ -56,6 +71,8 @@ export class CommentStore {
       entry.set("body", input.body);
       entry.set("createdAt", Date.now());
       entry.set("resolved", false);
+      entry.set("assignedTo", null);
+      entry.set("replies", []);
       entry.set("quote", input.text.toString().slice(input.from, input.to));
       entry.set("start", Y.encodeRelativePosition(start));
       entry.set("end", Y.encodeRelativePosition(end));
@@ -84,12 +101,33 @@ export class CommentStore {
         body: entry.get("body") as string,
         createdAt: entry.get("createdAt") as number,
         resolved: entry.get("resolved") as boolean,
+        assignedTo: (entry.get("assignedTo") as string | null) ?? null,
+        replies: (entry.get("replies") as CommentReply[] | undefined) ?? [],
         quote: entry.get("quote") as string,
         range: alive ? { from: start.index, to: end.index } : null,
         orphaned: !alive,
       });
     }
     return out.sort((a, b) => (a.range?.from ?? Infinity) - (b.range?.from ?? Infinity));
+  }
+
+  /** Hand a thread to an agent (or take it back with null). */
+  assign(id: string, authorId: string | null): void {
+    this.doc.transact(() => {
+      for (const entry of this.array) {
+        if (entry.get("id") === id) entry.set("assignedTo", authorId);
+      }
+    }, "comments");
+  }
+
+  reply(id: string, body: string, authorId: string, authorName: string): void {
+    this.doc.transact(() => {
+      for (const entry of this.array) {
+        if (entry.get("id") !== id) continue;
+        const existing = (entry.get("replies") as CommentReply[] | undefined) ?? [];
+        entry.set("replies", [...existing, { authorId, authorName, body, at: Date.now() }]);
+      }
+    }, "comments");
   }
 
   setResolved(id: string, resolved: boolean): void {

@@ -3,7 +3,17 @@ import { stat } from "node:fs/promises";
 import { type IncomingMessage, type Server, createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { WebSocketServer } from "ws";
-import { GitSnapshotter, type GitSnapshotOptions, Vault, type VaultOptions } from "@quire/bridge";
+import {
+  GitSnapshotter,
+  type GitSnapshotOptions,
+  Vault,
+  type VaultOptions,
+  buildReplay,
+  knownAuthors,
+  readPolicy,
+  summarise,
+  writePolicy,
+} from "@quire/bridge";
 import { buildLinkGraph } from "./links.js";
 import {
   RegistryFetchError,
@@ -14,6 +24,14 @@ import {
   sourceUrl,
 } from "./registry.js";
 import { GithubSearchError, listMarkdown, searchGithub } from "./github.js";
+import {
+  type LockedDocument,
+  checkDrift,
+  readLockfile,
+  recordInstall,
+  stripProvenanceHeader,
+} from "./lockfile.js";
+import { ExecRefused, formatResult, runBlock, supportedLanguages } from "./exec.js";
 import { isRequestAllowed, isSafeDocPath } from "./security.js";
 import { ShareRegistry, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
@@ -35,6 +53,11 @@ export interface QuireServerOptions extends VaultOptions {
   registryPath?: string;
   /** Allow live GitHub search from Discover. */
   githubSearch?: boolean;
+  /**
+   * Allow running fenced code blocks. Off by default, and refused at request time when
+   * the server is bound beyond loopback -- see exec.ts.
+   */
+  allowExec?: boolean;
 }
 
 const MIME: Record<string, string> = {
@@ -139,7 +162,8 @@ export class QuireServer {
       const role = this.shares.roleFor(url.searchParams.get("share"), path);
       if (role === "denied") return reject("403 Forbidden");
 
-      wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws, role));
+      const isAgent = url.searchParams.get("kind") === "agent";
+      wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws, role, isAgent));
     });
 
     this.http = http;
@@ -170,6 +194,7 @@ export class QuireServer {
         epoch: this.epoch,
         git: this.gitReady,
         githubSearch: Boolean(this.opts.githubSearch),
+        exec: Boolean(this.opts.allowExec),
       });
       return;
     }
@@ -247,6 +272,8 @@ export class QuireServer {
         const handle = this.vault.getDoc(target);
         handle.doc.transact(() => handle.text.insert(0, attribute(entry, content)));
         await this.vault.flush();
+        // Remember what upstream looked like, so drift can be told from local editing.
+        await recordInstall(this.vault.root, entry, target, content);
         json({ path: target });
       } catch (error) {
         json({ error: (error as RegistryFetchError).message }, 502);
@@ -337,6 +364,127 @@ export class QuireServer {
       return;
     }
 
+    if (url.pathname === "/api/replay") {
+      const path = url.searchParams.get("doc") ?? "";
+      if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      const handle = this.vault.getDoc(path);
+      json({
+        frames: buildReplay(handle.doc, "content", {
+          frames: Math.min(Number(url.searchParams.get("frames") ?? 48), 160),
+        }),
+        authors: knownAuthors(handle.doc),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/provenance") {
+      const path = url.searchParams.get("doc") ?? "";
+      if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      const handle = this.vault.getDoc(path);
+      const authors = knownAuthors(handle.doc);
+      json({
+        summary: summarise(handle.doc, handle.text, authors as never),
+        policy: readPolicy(handle.doc),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/policy" && req.method === "POST") {
+      const path = url.searchParams.get("doc") ?? "";
+      if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      const handle = this.vault.getDoc(path);
+      const mode = url.searchParams.get("mode");
+      const locked = url.searchParams.get("locked");
+      json({
+        policy: writePolicy(handle.doc, {
+          ...(mode ? { mode: mode as "edit" | "propose" | "read-only" } : {}),
+          ...(locked !== null ? { lockedSections: locked ? locked.split("|") : [] } : {}),
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/drift") {
+      if (!this.opts.registryPath) return json({ documents: [] });
+      const index = await loadRegistry(this.opts.registryPath);
+      const lock = await readLockfile(this.vault.root);
+      const entryFor = (locked: LockedDocument) => ({
+        id: locked.path, title: locked.title, byline: locked.repo.split("/")[0] ?? "",
+        description: "", category: "", repo: locked.repo, branch: locked.branch,
+        path: locked.sourcePath, installAs: locked.path, license: locked.license, stars: 0,
+      });
+      const reports = await Promise.all(
+        Object.values(lock.documents).map((locked) =>
+          checkDrift(
+            (l) => fetchEntry(entryFor(l)),
+            locked,
+            this.vault.getDoc(locked.path).getContent(),
+          ),
+        ),
+      );
+      json({ documents: reports.map(({ upstreamText, ...rest }) => rest), indexed: index.entries.length });
+      return;
+    }
+
+    if (url.pathname === "/api/drift/update" && req.method === "POST") {
+      const path = url.searchParams.get("doc") ?? "";
+      const lock = await readLockfile(this.vault.root);
+      const locked = lock.documents[path];
+      if (!locked) return json({ error: `${path} is not a tracked document` }, 404);
+
+      const entryFor = (l: LockedDocument) => ({
+        id: l.path, title: l.title, byline: "", description: "", category: "",
+        repo: l.repo, branch: l.branch, path: l.sourcePath, installAs: l.path,
+        license: l.license, stars: 0,
+      });
+      const report = await checkDrift((l) => fetchEntry(entryFor(l)), locked, this.vault.getDoc(path).getContent());
+      if (!report.upstreamText) return json({ error: report.detail }, 502);
+
+      // Apply upstream as a CRDT delta, exactly as an external edit would arrive, so any
+      // local changes outside the changed region survive.
+      const handle = this.vault.getDoc(path);
+      handle.applyFromDisk(attribute(entryFor(locked), report.upstreamText));
+      await this.vault.flush();
+      await recordInstall(this.vault.root, entryFor(locked), path, report.upstreamText);
+      json({ path, state: report.state });
+      return;
+    }
+
+    if (url.pathname === "/api/exec" && req.method === "POST") {
+      const host = this.opts.host ?? "127.0.0.1";
+      const exposed = !["127.0.0.1", "localhost", "::1"].includes(host);
+      const body = await readBody(req);
+      const { language, source, path } = JSON.parse(body || "{}") as {
+        language?: string;
+        source?: string;
+        path?: string;
+      };
+      if (!language || !source) return json({ error: "language and source are required" }, 400);
+
+      try {
+        const result = await runBlock(language, source, {
+          enabled: Boolean(this.opts.allowExec),
+          exposed,
+          cwd: this.vault.root,
+        });
+        // Log every execution. A feature that runs arbitrary code should never do so
+        // quietly.
+        console.log(
+          `[quire] ran ${language} block from ${path ?? "(unknown)"} -> ${result.exitCode === 0 ? "ok" : `exit ${result.exitCode}`} in ${result.durationMs}ms`,
+        );
+        json({ result, markdown: formatResult(result) });
+      } catch (error) {
+        json(
+          {
+            error: (error as ExecRefused).message,
+            supported: supportedLanguages(),
+          },
+          error instanceof ExecRefused ? 403 : 500,
+        );
+      }
+      return;
+    }
+
     if (url.pathname === "/api/links") {
       json(buildLinkGraph(this.documents()));
       return;
@@ -412,4 +560,16 @@ function attribute(
     `<!-- Installed by Quire from ${entry.repo} (${entry.license}). ` +
     `"${entry.title}" by ${entry.byline}. Source: https://github.com/${entry.repo} -->\n\n`;
   return header + content;
+}
+
+/** Read a request body with a hard ceiling, so a stream cannot exhaust memory. */
+async function readBody(req: IncomingMessage, limit = 1024 * 1024): Promise<string> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > limit) throw new Error("Request body too large");
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }

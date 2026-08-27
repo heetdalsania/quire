@@ -18,6 +18,9 @@ if (args.includes("--help") || args.includes("-h")) {
     --no-git              Disable periodic git snapshots
     --no-discover         Disable the Discover tab (no outbound requests at all)
     --no-search           Keep the curated index, but disable live GitHub search
+    --allow-exec          Allow running fenced code blocks from documents. Off by
+                          default. Runs arbitrary code as you; refused whenever the
+                          server is bound beyond localhost.
 
   Requests are refused unless they come from loopback or an allowed host, so a web page
   you happen to have open cannot reach into your vault.
@@ -57,6 +60,7 @@ const server = await QuireServer.start({
   // Discover is index-only: entries are fetched from their own repositories on request.
   ...(args.includes("--no-discover") || !existsSync(registryPath) ? {} : { registryPath }),
   githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
+  allowExec: args.includes("--allow-exec"),
 });
 
 const count = server.vault.list().length;
@@ -66,6 +70,9 @@ console.log(`  docs    ${count} markdown file${count === 1 ? "" : "s"}`);
 console.log(`  local   http://127.0.0.1:${server.port}\n`);
 const snapshots = server.git && (await server.git.isRepo());
 console.log(`  git     ${snapshots ? "snapshots on (commits when idle)" : "not a repository -- snapshots off"}`);
+if (args.includes("--allow-exec")) {
+  console.log(`  exec    ENABLED -- documents in this vault can run code as you`);
+}
 if (allowedHosts.length > 0) console.log(`  trusted ${allowedHosts.join(", ")}`);
 console.log(`\n  Local only. Nothing is uploaded and no account is needed.`);
 console.log(`  Ctrl+C to stop.\n`);

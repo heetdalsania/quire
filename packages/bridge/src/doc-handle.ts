@@ -31,9 +31,12 @@ export class DocHandle {
   /** Set once the file is gone from disk and the rename grace period has expired. */
   deleted = false;
 
-  constructor(path: string) {
+  constructor(path: string, options: { history?: boolean } = {}) {
     this.path = path;
-    this.doc = new Y.Doc();
+    // Yjs garbage collection discards deleted content, which is exactly the material a
+    // replay needs in order to show text being removed rather than jumping. Keeping it
+    // costs memory that grows with edit volume, so it is a vault-level choice.
+    this.doc = new Y.Doc({ gc: options.history === false });
     this.text = this.doc.getText(CONTENT_KEY);
   }
 

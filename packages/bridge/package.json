@@ -17,6 +17,18 @@
     "./comments": {
       "types": "./dist/src/comments.d.ts",
       "default": "./dist/src/comments.js"
+    },
+    "./provenance": {
+      "types": "./dist/src/provenance.d.ts",
+      "default": "./dist/src/provenance.js"
+    },
+    "./policy": {
+      "types": "./dist/src/policy.d.ts",
+      "default": "./dist/src/policy.js"
+    },
+    "./replay": {
+      "types": "./dist/src/replay.d.ts",
+      "default": "./dist/src/replay.js"
     }
   },
   "scripts": {

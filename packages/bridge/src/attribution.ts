@@ -37,10 +37,12 @@ export function insertAttributed(
   index: number,
   content: string,
   author: Author,
-  options: { suggestion?: string } = {},
+  options: { suggestion?: string | undefined; run?: string | undefined } = {},
 ): void {
   const attributes: Record<string, string> = { [ATTR_AUTHOR]: author.id };
   if (options.suggestion) attributes[ATTR_SUGGEST_INSERT] = options.suggestion;
+  // The run id is what turns "who wrote this" into "why does this exist".
+  if (options.run) attributes.run = options.run;
   text.doc?.transact(() => {
     text.insert(index, content, attributes);
   }, authorOrigin(author.id));

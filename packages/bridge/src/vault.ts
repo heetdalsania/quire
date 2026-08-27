@@ -16,6 +16,11 @@ export interface VaultOptions {
   renameGraceMs?: number;
   /** Files larger than this are skipped rather than loaded into memory. */
   maxFileBytes?: number;
+  /**
+   * Retain deleted content so documents can be replayed. Costs memory proportional to
+   * edit volume; disable for very large or very busy vaults.
+   */
+  history?: boolean;
 }
 
 interface PendingUnlink {
@@ -35,6 +40,7 @@ const DEFAULTS = {
   stabilityThresholdMs: 60,
   renameGraceMs: 300,
   maxFileBytes: 8 * 1024 * 1024,
+  history: true,
 };
 
 const TMP_PREFIX = ".quire-tmp-";
@@ -74,6 +80,7 @@ export class Vault extends EventEmitter {
       stabilityThresholdMs: options.stabilityThresholdMs ?? DEFAULTS.stabilityThresholdMs,
       renameGraceMs: options.renameGraceMs ?? DEFAULTS.renameGraceMs,
       maxFileBytes: options.maxFileBytes ?? DEFAULTS.maxFileBytes,
+      history: options.history ?? DEFAULTS.history,
     };
   }
 
@@ -104,7 +111,7 @@ export class Vault extends EventEmitter {
       const content = await this.readDoc(absPath, relPath);
       if (content === null) continue;
 
-      const handle = new DocHandle(relPath);
+      const handle = new DocHandle(relPath, { history: this.opts.history });
       handle.initFromDisk(content);
       this.bind(handle);
       this.handles.set(relPath, handle);
@@ -126,7 +133,7 @@ export class Vault extends EventEmitter {
     }
     let handle = this.handles.get(key);
     if (!handle) {
-      handle = new DocHandle(key);
+      handle = new DocHandle(key, { history: this.opts.history });
       this.bind(handle);
       this.handles.set(key, handle);
       this.emit("doc:open", { path: key });
@@ -362,7 +369,7 @@ export class Vault extends EventEmitter {
       return;
     }
 
-    const handle = new DocHandle(relPath);
+    const handle = new DocHandle(relPath, { history: this.opts.history });
     handle.initFromDisk(content);
     this.bind(handle);
     this.handles.set(relPath, handle);

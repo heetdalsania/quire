@@ -4,10 +4,12 @@ import WebSocket from "ws";
 import { Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
 import { readSyncMessage, writeSyncStep1, writeUpdate } from "y-protocols/sync";
 import * as Y from "yjs";
-import { type Author, registerAuthor } from "@quire/bridge";
+import { type AgentPolicy, type Author, readPolicy, registerAuthor, registerRun, newRunId } from "@quire/bridge";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+const MSG_EPOCH = 2;
+const MSG_NOTICE = 3;
 const SYNC_STEP_2 = 1;
 const SYNC_UPDATE = 2;
 
@@ -24,6 +26,8 @@ export class AgentSession {
   readonly awareness: Awareness;
   private ws: WebSocket | null = null;
   private synced = false;
+  /** Refusals from the server, e.g. an exhausted leash. Surfaced to the agent verbatim. */
+  readonly notices: string[] = [];
 
   constructor(
     private readonly baseUrl: string,
@@ -36,6 +40,10 @@ export class AgentSession {
 
   async connect(timeoutMs = 8000): Promise<void> {
     const url = new URL(`/sync?doc=${encodeURIComponent(this.path)}`, this.baseUrl);
+    // Declaring itself an agent is what puts this connection on a leash. It is declared
+    // rather than sniffed because an agent that hides is a worse failure than one that
+    // is trusted to say so and then constrained by the server regardless.
+    url.searchParams.set("kind", "agent");
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(url.toString());
     this.ws = ws;
@@ -63,6 +71,11 @@ export class AgentSession {
         const decoder = decoding.createDecoder(new Uint8Array(data));
         const enc = encoding.createEncoder();
         const type = decoding.readVarUint(decoder);
+        if (type === MSG_NOTICE) {
+          this.notices.push(decoding.readVarString(decoder));
+          return;
+        }
+        if (type === MSG_EPOCH) return;
         if (type === MSG_SYNC) {
           encoding.writeVarUint(enc, MSG_SYNC);
           const step = readSyncMessage(decoder, enc, this.doc, this);
@@ -114,6 +127,53 @@ export class AgentSession {
   /** Give the server a moment to broadcast and the vault to write to disk. */
   async settle(ms = 250): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /** The leash this document puts on agents. */
+  policy(): AgentPolicy {
+    return readPolicy(this.doc);
+  }
+
+  /**
+   * Record why this edit is happening, and return the run id to mark spans with.
+   *
+   * Provenance for prose usually stops at "who". Keeping the instruction alongside the
+   * text answers "why", which for a spec or a policy is the more useful question.
+   */
+  beginRun(tool: string, prompt: string | null, model: string | null): string {
+    const id = newRunId();
+    registerRun(this.doc, { id, authorId: this.author.id, model, prompt, tool });
+    return id;
+  }
+
+  /**
+   * Where the humans are right now.
+   *
+   * Presence is broadcast continuously, so an agent can see a person's cursor before it
+   * starts rewriting the paragraph they are sitting in.
+   */
+  humanCursors(): Array<{ name: string; index: number }> {
+    const out: Array<{ name: string; index: number }> = [];
+    for (const [clientId, state] of this.awareness.getStates()) {
+      if (clientId === this.doc.clientID) continue;
+      const peer = state as {
+        user?: { name?: string; kind?: string };
+        cursor?: { head?: unknown };
+      };
+      if (peer.user?.kind === "agent") continue;
+      const head = peer.cursor?.head;
+      if (!head) continue;
+      try {
+        const abs = Y.createAbsolutePositionFromRelativePosition(
+          Y.decodeRelativePosition(new Uint8Array(Object.values(head as Record<string, number>))),
+          this.doc,
+        );
+        if (abs) out.push({ name: peer.user?.name ?? "Someone", index: abs.index });
+      } catch {
+        // A cursor we cannot resolve is one we cannot avoid; ignore it rather than throw.
+      }
+    }
+    return out;
   }
 
   close(): void {
