@@ -16,7 +16,8 @@ import { ATTR_AUTHOR, spans } from "./attribution.js";
 export interface ReplayFrame {
   /** Position in the replay, 0..1. */
   at: number;
-  text: string;
+  /** Only present when text was explicitly requested; see the note on ReplayOptions. */
+  text?: string;
   /** Characters attributable to each author at this point. */
   byAuthor: Record<string, number>;
   totalChars: number;
@@ -25,6 +26,32 @@ export interface ReplayFrame {
 export interface ReplayOptions {
   /** How many frames to produce. More is smoother and more expensive. */
   frames?: number;
+  /**
+   * Include each frame's full text.
+   *
+   * Off by default, and deliberately so: a 160-frame replay of a one-megabyte document
+   * carries 160 megabytes of text, which is enough to stall a browser and to exhaust the
+   * server building it. Callers fetch the text for the frame they are actually showing.
+   */
+  withText?: boolean;
+}
+
+/**
+ * How many frames are worth building for a document of this size.
+ *
+ * Replay is most useful on documents a person actually reads. Scaling the count down for
+ * large documents keeps the cost bounded rather than refusing outright.
+ */
+export function frameBudget(docLength: number, requested: number): number {
+  // Each frame materialises a whole copy of the document, so the ceiling falls as the
+  // document grows. Two is the floor: below that there is nothing to scrub between.
+  const ceiling =
+    docLength > 2_000_000 ? 3
+    : docLength > 400_000 ? 8
+    : docLength > 100_000 ? 20
+    : docLength > 20_000 ? 40
+    : 160;
+  return Math.max(2, Math.min(requested, ceiling));
 }
 
 /**
@@ -35,14 +62,17 @@ export interface ReplayOptions {
  * replayed, but deletions will appear as jumps rather than as text being removed.
  */
 export function buildReplay(doc: Y.Doc, key = "content", options: ReplayOptions = {}): ReplayFrame[] {
-  const frameCount = Math.max(2, Math.min(options.frames ?? 40, 200));
   const text = doc.getText(key);
+  const frameCount = frameBudget(text.length, options.frames ?? 40);
+  const withText = options.withText ?? false;
   const finalState = Y.encodeStateVector(doc);
 
   // Walk the clock range of every contributing client together, so a frame is a moment in
   // the document's life rather than a moment in one participant's.
   const clients = [...(Y.decodeStateVector(finalState) as Map<number, number>).entries()];
-  if (clients.length === 0) return [{ at: 1, text: text.toString(), byAuthor: {}, totalChars: text.length }];
+  if (clients.length === 0) {
+    return [{ at: 1, ...(withText ? { text: text.toString() } : {}), byAuthor: {}, totalChars: text.length }];
+  }
 
   const frames: ReplayFrame[] = [];
   for (let i = 1; i <= frameCount; i++) {
@@ -56,7 +86,7 @@ export function buildReplay(doc: Y.Doc, key = "content", options: ReplayOptions 
       const restoredText = restored.getText(key);
       frames.push({
         at: ratio,
-        text: restoredText.toString(),
+        ...(withText ? { text: restoredText.toString() } : {}),
         byAuthor: countByAuthor(restoredText),
         totalChars: restoredText.length,
       });
@@ -68,7 +98,12 @@ export function buildReplay(doc: Y.Doc, key = "content", options: ReplayOptions 
   }
 
   // Always finish on the real document, so the last frame is exactly what is on screen.
-  frames.push({ at: 1, text: text.toString(), byAuthor: countByAuthor(text), totalChars: text.length });
+  frames.push({
+    at: 1,
+    ...(withText ? { text: text.toString() } : {}),
+    byAuthor: countByAuthor(text),
+    totalChars: text.length,
+  });
   return dedupe(frames);
 }
 
@@ -84,14 +119,39 @@ function countByAuthor(text: Y.Text): Record<string, number> {
 /** Collapse runs of identical frames; a replay should not stall on unchanged text. */
 function dedupe(frames: ReplayFrame[]): ReplayFrame[] {
   const out: ReplayFrame[] = [];
+  const same = (a: ReplayFrame, b: ReplayFrame): boolean =>
+    a.text !== undefined || b.text !== undefined
+      ? a.text === b.text
+      : a.totalChars === b.totalChars && JSON.stringify(a.byAuthor) === JSON.stringify(b.byAuthor);
+
   for (const frame of frames) {
-    if (out.length > 0 && out[out.length - 1]!.text === frame.text) {
+    const previous = out[out.length - 1];
+    if (previous && same(previous, frame)) {
       out[out.length - 1] = frame; // keep the later timestamp
       continue;
     }
     out.push(frame);
   }
   return out;
+}
+
+/** Materialise a single frame's text, for a scrubber showing one position at a time. */
+export function replayFrameText(doc: Y.Doc, at: number, key = "content"): string {
+  const ratio = Math.max(0, Math.min(1, at));
+  if (ratio >= 1) return doc.getText(key).toString();
+
+  const partial = new Map<number, number>();
+  for (const [client, clock] of (Y.decodeStateVector(Y.encodeStateVector(doc)) as Map<number, number>).entries()) {
+    partial.set(client, Math.ceil(clock * ratio));
+  }
+  try {
+    const restored = Y.createDocFromSnapshot(doc, new Y.Snapshot(Y.createDeleteSet(), partial));
+    const text = restored.getText(key).toString();
+    restored.destroy();
+    return text;
+  } catch {
+    return doc.getText(key).toString();
+  }
 }
 
 export { ATTR_AUTHOR };

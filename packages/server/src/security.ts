@@ -60,6 +60,23 @@ export function isRequestAllowed(req: IncomingMessage, policy: OriginPolicy = {}
 export function isSafeDocPath(path: string): boolean {
   if (!path || path.length > 1024) return false;
   if (path.includes("\0")) return false;
+  // Control characters have no place in a filename and are a classic way to smuggle
+  // something past a log or a display.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
+  if (/[\u0000-\u001f\u007f]/.test(path)) return false;
+
+  // Defeat encoding tricks: "..%2f..%2fetc" survives a naive separator check because it
+  // contains no literal slash, but any layer that decodes it later sees traversal. If the
+  // decoded form would not be safe, neither is this one.
+  if (path.includes("%")) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      return false; // Malformed escape sequence.
+    }
+    if (decoded !== path && !isSafeDocPath(decoded)) return false;
+  }
 
   const normalised = path.replace(/\\/g, "/");
   if (normalised.startsWith("/")) return false;

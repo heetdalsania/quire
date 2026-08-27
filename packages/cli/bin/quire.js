@@ -18,6 +18,9 @@ if (args.includes("--help") || args.includes("-h")) {
     --no-git              Disable periodic git snapshots
     --no-discover         Disable the Discover tab (no outbound requests at all)
     --no-search           Keep the curated index, but disable live GitHub search
+    --history             Retain edit history so documents can be replayed. Off by
+                          default: keeping it makes document state grow with edit
+                          volume rather than with document size.
     --allow-exec          Allow running fenced code blocks from documents. Off by
                           default. Runs arbitrary code as you; refused whenever the
                           server is bound beyond localhost.
@@ -61,6 +64,7 @@ const server = await QuireServer.start({
   ...(args.includes("--no-discover") || !existsSync(registryPath) ? {} : { registryPath }),
   githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
   allowExec: args.includes("--allow-exec"),
+  history: args.includes("--history"),
 });
 
 const count = server.vault.list().length;
@@ -70,6 +74,9 @@ console.log(`  docs    ${count} markdown file${count === 1 ? "" : "s"}`);
 console.log(`  local   http://127.0.0.1:${server.port}\n`);
 const snapshots = server.git && (await server.git.isRepo());
 console.log(`  git     ${snapshots ? "snapshots on (commits when idle)" : "not a repository -- snapshots off"}`);
+if (args.includes("--history")) {
+  console.log(`  history retained -- documents can be replayed, and state grows with edits`);
+}
 if (args.includes("--allow-exec")) {
   console.log(`  exec    ENABLED -- documents in this vault can run code as you`);
 }

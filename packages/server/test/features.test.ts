@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { buildReplay, insertAttributed, type Author } from "@quire/bridge";
+import { buildReplay, frameBudget, insertAttributed, replayFrameText, type Author } from "@quire/bridge";
 import { QuireServer } from "../src/index.js";
 import { ExecRefused, formatResult, runBlock, supportedLanguages } from "../src/exec.js";
 import { checkDrift, hashText, readLockfile, recordInstall, stripProvenanceHeader } from "../src/lockfile.js";
@@ -149,7 +149,8 @@ describe("replay", () => {
     insertAttributed(text, text.length, "Second sentence. ", agent);
     insertAttributed(text, text.length, "Third sentence.", human);
 
-    const frames = buildReplay(doc, "content", { frames: 12 });
+    // Text is opt-in: shipping every frame's text scales with size times frame count.
+    const frames = buildReplay(doc, "content", { frames: 12, withText: true });
     expect(frames.length).toBeGreaterThan(1);
     // The last frame is always the live document.
     expect(frames[frames.length - 1]!.text).toBe(text.toString());
@@ -166,6 +167,33 @@ describe("replay", () => {
     const final = buildReplay(doc, "content", { frames: 6 }).at(-1)!;
     expect(final.byAuthor[human.id]).toBe("human words".length);
     expect(final.byAuthor[agent.id]).toBe(" agent words".length);
+  });
+
+  it("omits frame text unless asked, so payload does not scale with document size", () => {
+    const doc = new Y.Doc({ gc: false });
+    insertAttributed(doc.getText("content"), 0, "some words here", human);
+    const frames = buildReplay(doc, "content", { frames: 6 });
+    expect(frames.every((f) => f.text === undefined)).toBe(true);
+    // The counts a scrubber needs are still there.
+    expect(frames.at(-1)!.totalChars).toBe("some words here".length);
+  });
+
+  it("scales frame count down for large documents", () => {
+    expect(frameBudget(500, 160)).toBe(160);
+    expect(frameBudget(50_000, 160)).toBe(40);
+    expect(frameBudget(500_000, 160)).toBe(8);
+    expect(frameBudget(10_000_000, 160)).toBe(3);
+    // Never fewer than two, or there is nothing to scrub between.
+    expect(frameBudget(10_000_000, 1)).toBe(2);
+  });
+
+  it("materialises one frame at a time", () => {
+    const doc = new Y.Doc({ gc: false });
+    const text = doc.getText("content");
+    insertAttributed(text, 0, "early", human);
+    insertAttributed(text, text.length, " late", human);
+    expect(replayFrameText(doc, 1)).toBe("early late");
+    expect(replayFrameText(doc, 0.4).length).toBeLessThanOrEqual("early late".length);
   });
 
   it("handles an empty document without throwing", () => {

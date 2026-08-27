@@ -33,12 +33,31 @@ Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its
 authentication yet**: anyone who can reach the port can read and edit every document in the vault.
 Only do this on a network you trust, or behind something that provides authentication.
 
+## What the agent leash is, and is not
+
+Document policy -- insert and delete budgets, propose-only, read-only, locked sections --
+is enforced by the server on connections that identify themselves as agents. It is a
+guardrail against the realistic failure: an agent looping, over-deleting, or wandering into
+a section it was told to leave alone.
+
+**It is not a defence against a hostile client.** A connection can simply not declare
+itself an agent, and there is no authentication to tell one caller from another. Anything
+that can reach the port can already write. Treat the leash as a seatbelt, not a lock.
+
 ## Known limitations
 
 - **No authentication or per-document permissions.** Access is all-or-nothing per vault.
 - **No encryption at rest or in transit.** Run behind TLS if you expose it.
 - **Documents load eagerly at startup.** A vault with many thousands of files will use
   proportional memory.
+- **Edit history is off by default.** `--history` enables replay, but disabling Yjs
+  garbage collection makes document state grow with edit volume rather than with document
+  size -- measured at 308x the visible text after four thousand edits. That cost lands on
+  memory, on the browser's offline store, and on the payload every new client downloads.
+- **`--allow-exec` runs arbitrary code as you**, in the vault directory. It is refused
+  whenever the server is bound beyond loopback, never runs automatically, and is off
+  unless asked for -- but an installed document you then choose to run is still code you
+  are choosing to run.
 - **View links are enforced; comment links are advisory.** A view link's writes are dropped by the
   server, so read-only genuinely is read-only. A comment link is currently enforced only in the
   client, because distinguishing a comment write from a text write requires inspecting the CRDT

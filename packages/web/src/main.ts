@@ -103,9 +103,10 @@ let activeCategory: string | null = null;
 let githubSearchOn = false;
 let display: DisplaySettings = loadSettings();
 let execEnabled = false;
+let historyEnabled = false;
 let peer: PeerHandle | null = null;
 const driftByPath = new Map<string, string>();
-let replayFrames: Array<{ at: number; text: string; byAuthor: Record<string, number>; totalChars: number }> = [];
+let replayFrames: Array<{ at: number; byAuthor: Record<string, number>; totalChars: number }> = [];
 
 /**
  * Offline state is namespaced by server epoch.
@@ -495,20 +496,39 @@ async function startReplay(): Promise<void> {
     document.body.classList.add("replaying");
     replayRange.max = String(frames.length - 1);
     replayRange.value = String(frames.length - 1);
-    showFrame(frames.length - 1);
+    void showFrame(frames.length - 1);
   } catch (error) {
     toast((error as Error).message, true);
   }
 }
 
-function showFrame(index: number): void {
+let frameToken = 0;
+
+/**
+ * Show one replay position.
+ *
+ * Text is fetched per frame rather than shipped up front: a 160-frame replay of a large
+ * document would otherwise carry the whole document 160 times over. A token guards
+ * against a slow response for an earlier position landing after a later one.
+ */
+async function showFrame(index: number): Promise<void> {
   const frame = replayFrames[index];
-  if (!frame) return;
+  if (!frame || !current) return;
   replayLabel.textContent = `${pct(frame.at)} · ${frame.totalChars} chars`;
-  void renderPreview(previewEl, frame.text, { resolveLink: () => null, onNavigate: () => {} });
+
+  const token = ++frameToken;
+  try {
+    const { text } = await api<{ text: string }>(
+      `/api/replay/frame?doc=${encodeURIComponent(current)}&at=${frame.at}`,
+    );
+    if (token !== frameToken) return;
+    await renderPreview(previewEl, text, { resolveLink: () => null, onNavigate: () => {} });
+  } catch {
+    if (token === frameToken) replayLabel.textContent = "could not load that moment";
+  }
 }
 
-replayRange.oninput = () => showFrame(Number(replayRange.value));
+replayRange.oninput = () => void showFrame(Number(replayRange.value));
 $<HTMLButtonElement>("#replay-close").onclick = () => {
   replayBar.hidden = true;
   document.body.classList.remove("replaying");
@@ -550,7 +570,15 @@ insightBtn.onclick = () => {
         ));
 
         panel.append(document.createElement("hr"));
-        panel.append(menuItem("Replay this document", "watch it being written", () => void startReplay()));
+        if (historyEnabled) {
+          panel.append(menuItem("Replay this document", "watch it being written", () => void startReplay()));
+        } else {
+          panel.append(hint(
+            "Replay needs edit history, which is off by default because retaining it makes " +
+            "document state grow with every edit rather than with document size. Restart " +
+            "with --history to turn it on.",
+          ));
+        }
       } catch (error) {
         slot.replaceChildren();
         slot.append(hint((error as Error).message));
@@ -1204,12 +1232,16 @@ wireResizer($("#rz-editor"), "editor", splitEl);
 
 async function boot(): Promise<void> {
   try {
-    const info = await api<{ files: string[]; epoch: string; git: boolean; githubSearch: boolean; exec?: boolean }>("/api/files");
+    const info = await api<{
+      files: string[]; epoch: string; git: boolean; githubSearch: boolean;
+      exec?: boolean; history?: boolean;
+    }>("/api/files");
     allFiles = info.files;
     epoch = info.epoch;
     gitAvailable = info.git;
     githubSearchOn = info.githubSearch;
     execEnabled = info.exec ?? false;
+    historyEnabled = info.history ?? false;
   } catch {
     setStatus("server unreachable", false);
     pathEl.textContent = "Cannot reach the Quire server. Is it still running?";

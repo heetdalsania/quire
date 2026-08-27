@@ -33,10 +33,11 @@ export class DocHandle {
 
   constructor(path: string, options: { history?: boolean } = {}) {
     this.path = path;
-    // Yjs garbage collection discards deleted content, which is exactly the material a
-    // replay needs in order to show text being removed rather than jumping. Keeping it
-    // costs memory that grows with edit volume, so it is a vault-level choice.
-    this.doc = new Y.Doc({ gc: options.history === false });
+    // Garbage collection discards deleted content -- exactly the material replay needs to
+    // show text being removed rather than jumping. Disabling it lets state grow without
+    // bound (measured at 308x the visible text after four thousand edits), so history is
+    // opt-in and gc stays on unless someone asks for it.
+    this.doc = new Y.Doc({ gc: options.history !== true });
     this.text = this.doc.getText(CONTENT_KEY);
   }
 

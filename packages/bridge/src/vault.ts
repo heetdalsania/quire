@@ -17,8 +17,14 @@ export interface VaultOptions {
   /** Files larger than this are skipped rather than loaded into memory. */
   maxFileBytes?: number;
   /**
-   * Retain deleted content so documents can be replayed. Costs memory proportional to
-   * edit volume; disable for very large or very busy vaults.
+   * Retain deleted content so documents can be replayed.
+   *
+   * **Off by default, and that default is deliberate.** Yjs garbage collection is what
+   * keeps a document's state proportional to its text. With it disabled, a heavily edited
+   * document grows without bound: measured at 308x the visible text after four thousand
+   * edits. That cost is not only memory -- it is also the offline store, and the payload
+   * every newly connecting client downloads. Replay is worth it on documents people
+   * curate; it is not worth it by default on a vault an agent hammers all day.
    */
   history?: boolean;
 }
@@ -40,7 +46,7 @@ const DEFAULTS = {
   stabilityThresholdMs: 60,
   renameGraceMs: 300,
   maxFileBytes: 8 * 1024 * 1024,
-  history: true,
+  history: false,
 };
 
 const TMP_PREFIX = ".quire-tmp-";

@@ -10,6 +10,7 @@ import {
   type VaultOptions,
   buildReplay,
   knownAuthors,
+  replayFrameText,
   readPolicy,
   summarise,
   writePolicy,
@@ -25,6 +26,7 @@ import {
 } from "./registry.js";
 import { GithubSearchError, listMarkdown, searchGithub } from "./github.js";
 import {
+  type DriftReport,
   type LockedDocument,
   checkDrift,
   readLockfile,
@@ -74,6 +76,9 @@ export class QuireServer {
 
   /** Open server-sent-event streams, used to push vault changes to connected clients. */
   private readonly eventStreams = new Set<import("node:http").ServerResponse>();
+  /** A ceiling so a misbehaving client cannot open streams until the server runs out. */
+  private static readonly MAX_EVENT_STREAMS = 64;
+  private roomSweep: NodeJS.Timeout | null = null;
 
   /** Identifies this process's document lineage; see Room.add. */
   readonly epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -100,6 +105,26 @@ export class QuireServer {
     }
   }
 
+  /**
+   * Release rooms nobody is in.
+   *
+   * A room is cheap but not free -- it holds an Awareness and a document listener -- and
+   * over a long session with many documents they would otherwise accumulate for every
+   * file anyone ever opened. The document itself stays in the vault, so reconnecting just
+   * builds a fresh room.
+   */
+  private startRoomSweep(): void {
+    this.roomSweep = setInterval(() => {
+      for (const [path, room] of this.rooms) {
+        if (room.size === 0) {
+          room.destroy();
+          this.rooms.delete(path);
+        }
+      }
+    }, 60_000);
+    this.roomSweep.unref?.();
+  }
+
   private publish(kind: string): void {
     const payload = `data: ${JSON.stringify({ kind, files: this.vault.list() })}\n\n`;
     for (const stream of this.eventStreams) {
@@ -117,6 +142,7 @@ export class QuireServer {
     await server.listen();
     server.gitReady = Boolean(server.git && (await server.git.isRepo()));
     if (server.gitReady) server.git?.start();
+    server.startRoomSweep();
     return server;
   }
 
@@ -140,7 +166,17 @@ export class QuireServer {
   }
 
   private async listen(): Promise<void> {
-    const http = createServer((req, res) => void this.onRequest(req, res));
+    const http = createServer((req, res) => {
+      // An async handler that throws becomes an unhandled rejection, and Node's default
+      // is to kill the process -- so a single malformed request could end everyone's
+      // session. Every request is contained, whatever the endpoint does.
+      void this.onRequest(req, res).catch((error: unknown) => {
+        console.error(`[quire] request failed: ${(error as Error).message}`);
+        if (res.headersSent) return res.destroy();
+        res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ error: "Request failed" }));
+      });
+    });
     const wss = new WebSocketServer({ noServer: true });
 
     http.on("upgrade", (req, socket, head) => {
@@ -195,6 +231,7 @@ export class QuireServer {
         git: this.gitReady,
         githubSearch: Boolean(this.opts.githubSearch),
         exec: Boolean(this.opts.allowExec),
+        history: this.opts.history === true,
       });
       return;
     }
@@ -219,6 +256,10 @@ export class QuireServer {
         "cache-control": "no-cache",
         connection: "keep-alive",
       });
+      if (this.eventStreams.size >= QuireServer.MAX_EVENT_STREAMS) {
+        res.end("event: error\ndata: too many event streams\n\n");
+        return;
+      }
       res.write(`data: ${JSON.stringify({ kind: "files", files: this.vault.list() })}\n\n`);
       this.eventStreams.add(res);
       req.on("close", () => this.eventStreams.delete(res));
@@ -289,6 +330,9 @@ export class QuireServer {
       if (path && !isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
 
       const hours = Number(url.searchParams.get("hours") ?? 0);
+      if (!Number.isFinite(hours) || hours < 0) {
+        return json({ error: "hours must be zero (no expiry) or positive" }, 400);
+      }
       const share = this.shares.create({
         role,
         path: path ?? null,
@@ -367,13 +411,34 @@ export class QuireServer {
     if (url.pathname === "/api/replay") {
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      if (this.opts.history !== true) {
+        return json(
+          {
+            error:
+              "Replay needs edit history, which is off by default because retaining it " +
+              "makes document state grow without bound. Restart with --history to enable it.",
+          },
+          409,
+        );
+      }
       const handle = this.vault.getDoc(path);
+      // Metadata only. Frame text is fetched one at a time, because shipping every
+      // frame's full text scales with document size multiplied by frame count.
       json({
         frames: buildReplay(handle.doc, "content", {
           frames: Math.min(Number(url.searchParams.get("frames") ?? 48), 160),
         }),
         authors: knownAuthors(handle.doc),
       });
+      return;
+    }
+
+    if (url.pathname === "/api/replay/frame") {
+      const path = url.searchParams.get("doc") ?? "";
+      if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      const at = Number(url.searchParams.get("at") ?? 1);
+      if (!Number.isFinite(at)) return json({ error: "at must be a number" }, 400);
+      json({ text: replayFrameText(this.vault.getDoc(path).doc, at) });
       return;
     }
 
@@ -414,13 +479,21 @@ export class QuireServer {
         path: locked.sourcePath, installAs: locked.path, license: locked.license, stars: 0,
       });
       const reports = await Promise.all(
-        Object.values(lock.documents).map((locked) =>
-          checkDrift(
+        Object.values(lock.documents).map(async (locked): Promise<DriftReport> => {
+          // A lockfile ships inside a vault, so it can arrive from an untrusted
+          // repository. One malformed or hostile entry must not take out the listing.
+          if (!isSafeDocPath(locked.path)) {
+            return {
+              path: locked.path, title: locked.title, repo: locked.repo,
+              state: "unknown", detail: "Ignored: path escapes the vault.",
+            };
+          }
+          return checkDrift(
             (l) => fetchEntry(entryFor(l)),
             locked,
             this.vault.getDoc(locked.path).getContent(),
-          ),
-        ),
+          );
+        }),
       );
       json({ documents: reports.map(({ upstreamText, ...rest }) => rest), indexed: index.entries.length });
       return;
@@ -431,6 +504,9 @@ export class QuireServer {
       const lock = await readLockfile(this.vault.root);
       const locked = lock.documents[path];
       if (!locked) return json({ error: `${path} is not a tracked document` }, 404);
+      if (!isSafeDocPath(locked.path) || !isSafeDocPath(path)) {
+        return json({ error: "Refusing a lockfile path that escapes the vault" }, 400);
+      }
 
       const entryFor = (l: LockedDocument) => ({
         id: l.path, title: l.title, byline: "", description: "", category: "",
@@ -453,13 +529,16 @@ export class QuireServer {
     if (url.pathname === "/api/exec" && req.method === "POST") {
       const host = this.opts.host ?? "127.0.0.1";
       const exposed = !["127.0.0.1", "localhost", "::1"].includes(host);
-      const body = await readBody(req);
-      const { language, source, path } = JSON.parse(body || "{}") as {
-        language?: string;
-        source?: string;
-        path?: string;
-      };
-      if (!language || !source) return json({ error: "language and source are required" }, 400);
+      let parsed: { language?: string; source?: string; path?: string };
+      try {
+        parsed = JSON.parse((await readBody(req)) || "{}") as typeof parsed;
+      } catch {
+        return json({ error: "Body must be JSON" }, 400);
+      }
+      const { language, source, path } = parsed;
+      if (typeof language !== "string" || typeof source !== "string" || !language || !source) {
+        return json({ error: "language and source are required, as strings" }, 400);
+      }
 
       try {
         const result = await runBlock(language, source, {
@@ -532,6 +611,8 @@ export class QuireServer {
   }
 
   async close(): Promise<void> {
+    if (this.roomSweep) clearInterval(this.roomSweep);
+    this.roomSweep = null;
     for (const stream of this.eventStreams) stream.end();
     this.eventStreams.clear();
     this.git?.stop();
