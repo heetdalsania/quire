@@ -122,3 +122,82 @@ describe("write coalescing under pressure", () => {
     expect(await readFile(join(dir, "burst.md"), "utf8")).toBe(expected);
   }, 20_000);
 });
+
+describe("collaboration state survives a restart", () => {
+  it("keeps attribution, comments and policy across a restart", async () => {
+    const { CommentStore, insertAttributed, readPolicy, registerAuthor, writePolicy, summarise, knownAuthors } =
+      await import("../src/index.js");
+    const author = { id: "h1", name: "Heet", color: "#907aa9", kind: "human" as const };
+
+    await writeFile(join(dir, "a.md"), "# A\n\n", "utf8");
+    vault = await Vault.open({ root: dir });
+    let handle = vault.getDoc("a.md");
+    registerAuthor(handle.doc, author);
+    insertAttributed(handle.text, handle.text.length, "Attributed sentence.", author);
+    new CommentStore(handle.doc).add({
+      text: handle.text, from: 0, to: 3, body: "a comment", authorId: author.id, authorName: author.name,
+    });
+    writePolicy(handle.doc, { mode: "propose", lockedSections: ["Secret"] });
+    await vault.flush();
+    await vault.close();
+
+    // A fresh process, reading the same folder.
+    vault = await Vault.open({ root: dir });
+    handle = vault.getDoc("a.md");
+
+    expect(handle.getContent()).toContain("Attributed sentence.");
+    // Everything that makes Quire more than an editor used to vanish here.
+    expect(summarise(handle.doc, handle.text, knownAuthors(handle.doc) as never).humanShare).toBeGreaterThan(0);
+    expect(new CommentStore(handle.doc).list()).toHaveLength(1);
+    expect(readPolicy(handle.doc).mode).toBe("propose");
+    expect(readPolicy(handle.doc).lockedSections).toEqual(["Secret"]);
+  }, 20_000);
+
+  it("merges a file edited while the server was stopped", async () => {
+    const { insertAttributed, registerAuthor } = await import("../src/index.js");
+    const author = { id: "h1", name: "Heet", color: "#907aa9", kind: "human" as const };
+
+    await writeFile(join(dir, "b.md"), "line one\n", "utf8");
+    vault = await Vault.open({ root: dir });
+    const first = vault.getDoc("b.md");
+    registerAuthor(first.doc, author);
+    insertAttributed(first.text, first.text.length, "line two\n", author);
+    await vault.flush();
+    await vault.close();
+
+    // Someone edits the file in another editor, or pulls it from git.
+    await writeFile(join(dir, "b.md"), "line one\nline two\nline three\n", "utf8");
+
+    vault = await Vault.open({ root: dir });
+    const handle = vault.getDoc("b.md");
+    // The prose catches up without discarding the collaboration layer.
+    expect(handle.getContent()).toContain("line three");
+    expect(handle.getContent()).toContain("line two");
+  }, 20_000);
+
+  it("discards state for documents that no longer exist", async () => {
+    const { readdir } = await import("node:fs/promises");
+    await writeFile(join(dir, "temp.md"), "# Temp\n", "utf8");
+    vault = await Vault.open({ root: dir });
+    const handle = vault.getDoc("temp.md");
+    handle.doc.transact(() => handle.text.insert(handle.text.length, "x"));
+    await vault.flush();
+    await vault.close();
+
+    await rm(join(dir, "temp.md"));
+    vault = await Vault.open({ root: dir });
+    // Sidecars for deleted documents would otherwise accumulate forever.
+    const left = await readdir(join(dir, ".quire/state")).catch(() => []);
+    expect(left).toHaveLength(0);
+  }, 20_000);
+
+  it("never lists its own state directory as a document", async () => {
+    await writeFile(join(dir, "c.md"), "# C\n", "utf8");
+    vault = await Vault.open({ root: dir });
+    const handle = vault.getDoc("c.md");
+    handle.doc.transact(() => handle.text.insert(handle.text.length, "edit"));
+    await vault.flush();
+    await sleep(400);
+    expect(vault.list().every((p) => !p.includes(".quire"))).toBe(true);
+  }, 20_000);
+});

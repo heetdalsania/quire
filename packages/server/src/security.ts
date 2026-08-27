@@ -86,6 +86,6 @@ export function isSafeDocPath(path: string): boolean {
   const segments = normalised.split("/");
   if (segments.some((s) => s === ".." || s === "." || s === "")) return false;
   // Never expose repository or dependency internals through a document path.
-  if (segments.some((s) => s === ".git" || s === "node_modules")) return false;
+  if (segments.some((s) => s === ".git" || s === "node_modules" || s === ".quire")) return false;
   return true;
 }

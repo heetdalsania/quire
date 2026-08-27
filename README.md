@@ -52,6 +52,7 @@ diff you read afterwards.
 | **Mermaid** | Rendered in the live preview |
 | **Git snapshots** | Periodic commits on quiet. Git is the archive, never the transport |
 | **Discover** | Browse widely-used Markdown — agent configs, skills, conventions — and add it to your vault with provenance recorded. An index, not a host: files come from their own repositories |
+| **Durable collaboration** | Authorship, comments, provenance and policy persist in `.quire/state/` and survive a restart. The Markdown stays clean; delete the directory and you lose only the collaboration layer |
 | **Live updates** | Files created by an agent, by Discover, or by another tool appear immediately |
 | **Provenance receipts** | One click turns a document into a shareable page: how much a person wrote, how much an agent did, which suggestions were accepted, and a replay of it being written. Self-contained HTML — no server, no account, works offline |
 | **Review requests** | Send a link with a brief. The reviewer comments without an account, and comment-only is enforced by the server rather than by hiding the editor |

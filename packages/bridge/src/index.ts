@@ -2,6 +2,7 @@ export * from "./attribution.js";
 export * from "./provenance.js";
 export * from "./policy.js";
 export * from "./replay.js";
+export * from "./store.js";
 
 export { CommentStore, type CommentThread } from "./comments.js";
 export { applyExternalChange, applyTextDiff } from "./diff.js";

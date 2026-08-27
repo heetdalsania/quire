@@ -106,3 +106,33 @@ describe("agent sessions", () => {
     expect(committedText(s.text)).not.toContain("MAYBE");
   });
 });
+
+describe("an agent cannot talk its way out of its own leash", () => {
+  it("refuses to loosen a policy it tightened", async () => {
+    const { readPolicy, writePolicy } = await import("@quire/bridge");
+    const handle = server.vault.getDoc("doc.md");
+
+    writePolicy(handle.doc, { mode: "propose" });
+    expect(readPolicy(handle.doc).mode).toBe("propose");
+
+    // Tightening further is fine.
+    writePolicy(handle.doc, { mode: "read-only" });
+    expect(readPolicy(handle.doc).mode).toBe("read-only");
+  });
+
+  it("drops an agent's write while the document is read-only, and says so", async () => {
+    const { writePolicy } = await import("@quire/bridge");
+    const handle = server.vault.getDoc("doc.md");
+    writePolicy(handle.doc, { mode: "read-only" });
+
+    const s = await join_("doc.md");
+    const before = handle.getContent();
+    insertAttributed(s.text, s.text.length, "SHOULD NOT LAND", agent);
+    await sleep(500);
+
+    expect(handle.getContent()).toBe(before);
+    // The refusal is reported, not swallowed -- a tool that does not check would
+    // otherwise report success for a write that never landed.
+    expect(s.notices.join(" ")).toContain("read-only");
+  });
+});

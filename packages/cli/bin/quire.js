@@ -18,6 +18,8 @@ if (args.includes("--help") || args.includes("-h")) {
     --no-git              Disable periodic git snapshots
     --no-discover         Disable the Discover tab (no outbound requests at all)
     --no-search           Keep the curated index, but disable live GitHub search
+    --no-persist          Do not save collaboration state. Comments, attribution and
+                          policy then last only as long as the server runs.
     --history             Retain edit history so documents can be replayed. Off by
                           default: keeping it makes document state grow with edit
                           volume rather than with document size.
@@ -65,6 +67,7 @@ const server = await QuireServer.start({
   githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
   allowExec: args.includes("--allow-exec"),
   history: args.includes("--history"),
+  persist: !args.includes("--no-persist"),
 });
 
 const count = server.vault.list().length;

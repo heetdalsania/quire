@@ -99,6 +99,18 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     return session;
   };
 
+  /**
+   * Surface anything the server refused.
+   *
+   * The leash drops updates rather than rejecting them at the protocol level, so a tool
+   * that does not check will happily report success for a write that never landed. That
+   * is the worst kind of failure: the agent proceeds believing the document changed.
+   */
+  const refusals = (session: AgentSession): string | null => {
+    const notices = session.notices.splice(0);
+    return notices.length > 0 ? notices.join(" ") : null;
+  };
+
   /** Wrap a handler so a thrown error becomes a tool error rather than a transport fault. */
   const guard =
     <A>(fn: (args: A) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>) =>
@@ -213,7 +225,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       }
 
       await session.settle();
-      const refused = session.notices.splice(0).join(" ");
+      const refused = refusals(session);
       if (refused) return fail(refused);
 
       if (yielded.defer) {
@@ -248,6 +260,8 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         ...(suggest ? { suggestion: `s_${Date.now().toString(36)}` } : {}),
       });
       await session.settle();
+      const refused = refusals(session);
+      if (refused) return fail(refused);
       return ok(`Appended ${text.length} characters to ${path}.`);
     }),
   );
@@ -322,6 +336,8 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         authorName: author.name,
       });
       await session.settle();
+      const refused = refusals(session);
+      if (refused) return fail(refused);
       return ok(`Comment added to ${path}.`);
     }),
   );
@@ -346,6 +362,8 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       const session = await join(path, false);
       insertAttributed(session.text, 0, content ?? `# ${path.replace(/\.md$/i, "")}\n\n`, author);
       await session.settle();
+      const refused = refusals(session);
+      if (refused) return fail(refused);
       return ok(`Created ${path}.`);
     }),
   );
@@ -458,6 +476,24 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         locked_sections?: string[] | undefined;
       }) => {
         const session = await join(path);
+        const current = readPolicy(session.doc);
+
+        // An agent may tighten its own leash but never loosen it -- otherwise the leash
+        // is advice it can talk itself out of, which is the thing it exists not to be.
+        const strictness = { edit: 0, propose: 1, "read-only": 2 } as const;
+        if (mode && strictness[mode] < strictness[current.mode]) {
+          return fail(
+            `This document is ${current.mode} for agents. An agent cannot relax its own ` +
+              `policy -- a person can change it in the Insight panel.`,
+          );
+        }
+        if (current.mode === "read-only") {
+          return fail(
+            "This document is read-only for agents, so its policy cannot be changed from here. " +
+              "A person can change it in the Insight panel.",
+          );
+        }
+
         const next = writePolicy(session.doc, {
           ...(mode ? { mode } : {}),
           ...(max_inserts !== undefined ? { maxInserts: max_inserts } : {}),
@@ -465,6 +501,8 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
           ...(locked_sections ? { lockedSections: locked_sections } : {}),
         });
         await session.settle();
+        const refused = refusals(session);
+        if (refused) return fail(refused);
         return ok(`Policy for ${path}: ${next.mode}, +${next.maxInserts}/-${next.maxDeletes}, locked: ${next.lockedSections.join(", ") || "none"}`);
       },
     ),
@@ -529,6 +567,8 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
         });
         comments.reply(thread_id, note ?? "Proposed a change.", author.id, author.name);
         await session.settle();
+        const refused = refusals(session);
+        if (refused) return fail(refused);
         return ok(`Proposed ${suggestionId} against ${thread_id}, and replied on the thread.`);
       },
     ),

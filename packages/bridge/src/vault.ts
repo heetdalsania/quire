@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/p
 import { basename, dirname, join, relative, sep } from "node:path";
 import { type FSWatcher, watch } from "chokidar";
 import { DISK_ORIGIN, DocHandle } from "./doc-handle.js";
+import { DocStore, restoreInto } from "./store.js";
 
 export interface VaultOptions {
   root: string;
@@ -27,6 +28,11 @@ export interface VaultOptions {
    * curate; it is not worth it by default on a vault an agent hammers all day.
    */
   history?: boolean;
+  /**
+   * Persist collaboration state -- attribution, comments, provenance, policy -- beside the
+   * vault so it survives a restart. Without it, only the Markdown text is durable.
+   */
+  persist?: boolean;
 }
 
 interface PendingUnlink {
@@ -47,6 +53,7 @@ const DEFAULTS = {
   renameGraceMs: 300,
   maxFileBytes: 8 * 1024 * 1024,
   history: false,
+  persist: true,
 };
 
 const TMP_PREFIX = ".quire-tmp-";
@@ -76,6 +83,10 @@ export class Vault extends EventEmitter {
   private readonly recentAdds = new Map<string, RecentAdd>();
   private watcher: FSWatcher | null = null;
   private closed = false;
+  private readonly store: DocStore | null;
+  /** Documents whose saved state is behind the live one. */
+  private readonly dirtyState = new Set<string>();
+  private stateTimer: NodeJS.Timeout | null = null;
 
   private constructor(options: VaultOptions) {
     super();
@@ -87,7 +98,9 @@ export class Vault extends EventEmitter {
       renameGraceMs: options.renameGraceMs ?? DEFAULTS.renameGraceMs,
       maxFileBytes: options.maxFileBytes ?? DEFAULTS.maxFileBytes,
       history: options.history ?? DEFAULTS.history,
+      persist: options.persist ?? DEFAULTS.persist,
     };
+    this.store = this.opts.persist ? new DocStore({ root: options.root }) : null;
   }
 
   static async open(options: VaultOptions): Promise<Vault> {
@@ -112,15 +125,38 @@ export class Vault extends EventEmitter {
       const absPath = join(entry.parentPath, entry.name);
       const relPath = this.toRel(absPath);
       if (!relPath || !this.isDocument(relPath)) continue;
-      if (relPath.split("/").some((part) => part === ".git" || part === "node_modules")) continue;
+      if (relPath.split("/").some((p) => p === ".git" || p === "node_modules" || p === ".quire")) continue;
 
       const content = await this.readDoc(absPath, relPath);
       if (content === null) continue;
 
       const handle = new DocHandle(relPath, { history: this.opts.history });
-      handle.initFromDisk(content);
+
+      // Saved state first, then the file merged over it as a delta. The file may have
+      // moved on while the server was stopped, and this is the same three-way behaviour
+      // the live watcher relies on -- so the prose catches up without discarding
+      // comments, attribution or policy.
+      const saved = this.store ? await this.store.load(relPath) : null;
+      if (saved) {
+        try {
+          restoreInto(handle.doc, saved, DISK_ORIGIN);
+          handle.lastDiskContent = handle.getContent();
+          handle.applyFromDisk(content);
+        } catch {
+          // Unreadable state is discarded rather than allowed to block the document.
+          handle.initFromDisk(content);
+        }
+      } else {
+        handle.initFromDisk(content);
+      }
+
       this.bind(handle);
       this.handles.set(relPath, handle);
+    }
+
+    if (this.store) {
+      // Sidecars for documents that no longer exist would accumulate forever.
+      await this.store.prune(new Set(this.handles.keys()));
     }
   }
 
@@ -181,8 +217,12 @@ export class Vault extends EventEmitter {
   }
 
   async close(): Promise<void> {
-    this.closed = true;
     await this.flush();
+    // Save state before shutting down, or the last edits of a session are the ones lost.
+    if (this.stateTimer) clearTimeout(this.stateTimer);
+    this.stateTimer = null;
+    await this.flushState();
+    this.closed = true;
     for (const { timer } of this.pendingUnlinks.values()) clearTimeout(timer);
     this.pendingUnlinks.clear();
     for (const { timer } of this.recentAdds.values()) clearTimeout(timer);
@@ -213,6 +253,38 @@ export class Vault extends EventEmitter {
     }, this.opts.writeDebounceMs);
     timer.unref?.();
     this.writeTimers.set(relPath, timer);
+  }
+
+  /**
+   * Save collaboration state on a slower cadence than the Markdown.
+   *
+   * The text must hit disk promptly -- that is the whole premise. The sidecar is larger
+   * and nobody is watching it, so it is batched to keep typing cheap.
+   */
+  private scheduleStateSave(relPath: string): void {
+    if (!this.store || this.closed) return;
+    this.dirtyState.add(relPath);
+    if (this.stateTimer) return;
+    this.stateTimer = setTimeout(() => {
+      this.stateTimer = null;
+      void this.flushState();
+    }, 2_000);
+    this.stateTimer.unref?.();
+  }
+
+  private async flushState(): Promise<void> {
+    if (!this.store) return;
+    for (const path of [...this.dirtyState]) {
+      this.dirtyState.delete(path);
+      const handle = this.handles.get(path);
+      if (!handle || handle.deleted) continue;
+      try {
+        const saved = await this.store.save(path, handle.doc);
+        if (!saved) this.emit("state:skipped", { path, reason: "too-large" });
+      } catch (error) {
+        this.emit("error", error);
+      }
+    }
   }
 
   private track(p: Promise<void>): void {
@@ -247,6 +319,7 @@ export class Vault extends EventEmitter {
     }
 
     handle.lastDiskContent = content;
+    this.scheduleStateSave(relPath);
     this.emit("doc:written", { path: relPath, bytes: Buffer.byteLength(content) });
   }
 
@@ -263,7 +336,7 @@ export class Vault extends EventEmitter {
       ignored: (p: string) => {
         const b = basename(p);
         if (b.startsWith(TMP_PREFIX)) return true;
-        return b === ".git" || b === "node_modules";
+        return b === ".git" || b === "node_modules" || b === ".quire";
       },
     });
 
@@ -436,6 +509,7 @@ export class Vault extends EventEmitter {
       handle.lastDiskContent = recent.content;
       handle.deleted = false;
       this.handles.set(newPath, handle);
+      void this.store?.rename(relPath, newPath);
       this.emit("doc:rename", { from: relPath, to: newPath });
       return;
     }
@@ -444,6 +518,7 @@ export class Vault extends EventEmitter {
     const timer = setTimeout(() => {
       this.pendingUnlinks.delete(relPath);
       handle.deleted = true;
+      void this.store?.forget(relPath);
       this.emit("doc:delete", { path: relPath });
     }, this.opts.renameGraceMs);
     timer.unref?.();

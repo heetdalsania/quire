@@ -44,6 +44,14 @@ a section it was told to leave alone.
 itself an agent, and there is no authentication to tell one caller from another. Anything
 that can reach the port can already write. Treat the leash as a seatbelt, not a lock.
 
+## Where collaboration state lives
+
+The Markdown file holds the text. Everything else -- authorship, comments, provenance,
+agent policy, suggestion outcomes -- lives in a CRDT, persisted to `.quire/state/` beside
+the vault. That directory is an implementation detail: deleting it loses the collaboration
+layer and nothing else, and your prose is untouched. Add it to `.gitignore` unless you
+deliberately want to share attribution history. `--no-persist` turns it off entirely.
+
 ## Known limitations
 
 - **No authentication or per-document permissions.** Access is all-or-nothing per vault.

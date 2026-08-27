@@ -52,6 +52,8 @@ export interface QuireServerOptions extends VaultOptions {
    * deliberately exposing the vault, e.g. through a tunnel.
    */
   allowedHosts?: string[];
+  /** Persist collaboration state beside the vault so it survives a restart. */
+  persist?: boolean;
   /** Path to the registry index. Omit to disable Discover entirely. */
   registryPath?: string;
   /** Allow live GitHub search from Discover. */
