@@ -58,6 +58,7 @@ diff you read afterwards.
 | **Export** | Markdown, self-contained HTML, plain text, copy-with-formatting for pasting into Docs, and print or save as PDF |
 | **Typography** | Prose and editor typefaces, size, leading, measure, theme, and a focus mode. Display only — never a byte of the file |
 | **GitHub search** | Search GitHub from Discover for anything the curated index misses, then pick which Markdown file to bring across |
+| **Adjustable panels** | Drag any divider, double-click to reset, collapse the sidebar (Cmd+\) or the comments panel (Cmd+Shift+\). Sizes persist |
 
 ## Connecting an agent
 

@@ -47,6 +47,8 @@
       </section>
     </aside>
 
+    <div class="resizer" id="rz-sidebar" aria-label="Resize the sidebar" aria-orientation="vertical"></div>
+
     <section id="discover" hidden>
       <header>
         <h1>Discover</h1>
@@ -57,6 +59,9 @@
 
     <main>
       <div id="topbar">
+        <button id="toggle-sidebar" class="tool panel-toggle" aria-label="Show or hide the sidebar" title="Sidebar (Cmd+\)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>
+        </button>
         <span id="docpath"></span>
         <div class="toolgroup">
           <button id="comment-btn" class="tool" aria-label="Comment on selection" disabled title="Comment on the selected text">
@@ -83,6 +88,9 @@
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7.2 8 10.4l3-3.2M2.5 13h11" /></svg>
             <span>Export</span>
           </button>
+          <button id="toggle-rail" class="tool" aria-label="Show or hide the comments panel" title="Comments panel (Cmd+Shift+\)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg>
+          </button>
           <button id="display-btn" class="tool" aria-label="Typography and theme" title="Typography and theme">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12.5 6.6 3.5h1.2l3.6 9M4.6 9.6h5.4M13 12.5V7" /></svg>
             <span>Display</span>
@@ -93,9 +101,12 @@
 
       <div id="split">
         <div id="editor"></div>
+        <div class="resizer" id="rz-editor" aria-label="Resize the editor" aria-orientation="vertical"></div>
         <article id="preview"></article>
       </div>
     </main>
+
+    <div class="resizer" id="rz-rail" aria-label="Resize the comments panel" aria-orientation="vertical"></div>
 
     <aside id="rail">
       <section>

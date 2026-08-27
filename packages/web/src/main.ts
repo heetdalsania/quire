@@ -23,6 +23,7 @@ import {
   downloadText,
   printDocument,
 } from "./export.js";
+import { applyLayout, getLayout, loadLayout, togglePanel, wireResizer } from "./layout.js";
 import { closeMenu, heading, hint, menuItem, openMenu, row, segmented, slider } from "./menus.js";
 import { configureSuggesting, isSuggesting, setSuggesting, suggestingExtension } from "./suggesting.js";
 import { onColorSchemeChange, renderPreview } from "./preview.js";
@@ -70,6 +71,9 @@ const suggestBtn = $<HTMLButtonElement>("#suggest-btn");
 const shareBtn = $<HTMLButtonElement>("#share-btn");
 const exportBtn = $<HTMLButtonElement>("#export-btn");
 const displayBtn = $<HTMLButtonElement>("#display-btn");
+const toggleSidebarBtn = $<HTMLButtonElement>("#toggle-sidebar");
+const toggleRailBtn = $<HTMLButtonElement>("#toggle-rail");
+const splitEl = $("#split");
 const modeVaultBtn = $<HTMLButtonElement>("#mode-vault");
 const modeDiscoverBtn = $<HTMLButtonElement>("#mode-discover");
 const categoriesEl = $("#categories");
@@ -871,6 +875,11 @@ window.addEventListener("keydown", (event) => {
   } else if (mod && event.shiftKey && event.key.toLowerCase() === "s") {
     event.preventDefault();
     suggestBtn.click();
+  } else if (mod && event.key === "\\") {
+    event.preventDefault();
+    if (event.shiftKey) togglePanel("rail");
+    else togglePanel("sidebar");
+    syncPanelButtons();
   } else if (mod && event.key.toLowerCase() === "p") {
     event.preventDefault();
     printDocument();
@@ -886,6 +895,20 @@ window.addEventListener("keydown", (event) => {
 
 applySettings(display);
 suggestBtn.setAttribute("aria-pressed", "false");
+
+// Panels: restore the saved arrangement, then make the dividers draggable.
+loadLayout();
+applyLayout();
+const syncPanelButtons = (): void => {
+  toggleSidebarBtn.setAttribute("aria-pressed", String(getLayout().sidebarOpen));
+  toggleRailBtn.setAttribute("aria-pressed", String(getLayout().railOpen));
+};
+syncPanelButtons();
+toggleSidebarBtn.onclick = () => { togglePanel("sidebar"); syncPanelButtons(); };
+toggleRailBtn.onclick = () => { togglePanel("rail"); syncPanelButtons(); };
+wireResizer($("#rz-sidebar"), "sidebar");
+wireResizer($("#rz-rail"), "rail");
+wireResizer($("#rz-editor"), "editor", splitEl);
 
 async function boot(): Promise<void> {
   try {

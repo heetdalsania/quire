@@ -82,10 +82,36 @@ export function renderGallery(
       desc.className = "desc";
       desc.textContent = entry.description;
 
+      // "See more" only appears when there is actually more: descriptions vary wildly in
+      // length, and a permanent toggle on a two-line blurb is just clutter.
+      const more = document.createElement("button");
+      more.className = "see-more";
+      more.type = "button";
+      more.textContent = "See more";
+      more.hidden = true;
+      more.onclick = () => {
+        const open = desc.classList.toggle("expanded");
+        more.textContent = open ? "See less" : "See more";
+      };
+      // Measured after layout, when the clamped height is knowable.
+      requestAnimationFrame(() => {
+        more.hidden = desc.scrollHeight <= desc.clientHeight + 1;
+      });
+
       const foot = document.createElement("footer");
       const licence = document.createElement("span");
       licence.className = "licence";
       licence.textContent = entry.license;
+
+      const repoLink = document.createElement("a");
+      repoLink.className = "icon-link";
+      repoLink.href = entry.source;
+      repoLink.target = "_blank";
+      repoLink.rel = "noopener noreferrer";
+      repoLink.title = `Open ${entry.repo} on GitHub`;
+      repoLink.setAttribute("aria-label", `Open ${entry.repo} on GitHub`);
+      repoLink.innerHTML =
+        '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .2a8 8 0 0 0-2.53 15.6c.4.07.55-.17.55-.38v-1.34c-2.23.49-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.09-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 .2z"/></svg>';
 
       const preview = document.createElement("button");
       preview.className = "ghost-sm";
@@ -100,8 +126,8 @@ export function renderGallery(
       install.title = already ? `${entry.installAs} is already here` : `Save as ${entry.installAs}`;
       install.onclick = () => handlers.onInstall(entry);
 
-      foot.append(licence, preview, install);
-      card.append(head, by, desc, foot);
+      foot.append(licence, repoLink, preview, install);
+      card.append(head, by, desc, more, foot);
       return card;
     }),
   );

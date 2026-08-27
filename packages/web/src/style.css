@@ -40,6 +40,13 @@
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Charter, "Source Serif 4", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
+  --sidebar-w: 258px;
+  --rail-w: 312px;
+  --rz-w: 5px;
+  --sidebar-rz: var(--rz-w);
+  --rail-rz: var(--rz-w);
+  --editor-w: 1fr;
+
   --r-sm: 6px;
   --r-md: 9px;
   --r-lg: 13px;
@@ -85,7 +92,8 @@ html, body { height: 100%; margin: 0; }
 
 body {
   display: grid;
-  grid-template-columns: 258px minmax(0, 1fr) 312px;
+  grid-template-columns:
+    var(--sidebar-w) var(--sidebar-rz) minmax(0, 1fr) var(--rail-rz) var(--rail-w);
   background: var(--base);
   color: var(--text);
   font: 14px/1.6 var(--font-ui);
@@ -127,6 +135,7 @@ button { font: inherit; cursor: pointer; }
 /* ── sidebar ─────────────────────────────────────────────────────────── */
 
 #sidebar {
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -234,7 +243,7 @@ button.link:hover { color: var(--accent); text-decoration: underline; text-under
 
 /* ── main ────────────────────────────────────────────────────────────── */
 
-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+main { grid-column: 3; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 #topbar {
   display: flex; align-items: center; gap: 10px;
@@ -283,7 +292,14 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--agent) 60%, transparent);
 }
 
-#split { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; flex: 1; }
+#split {
+  display: grid;
+  grid-template-columns: minmax(0, var(--editor-w, 1fr)) var(--rz-w) minmax(0, 1fr);
+  min-height: 0; flex: 1;
+}
+#editor { grid-column: 1; }
+#rz-editor { grid-column: 2; }
+#preview { grid-column: 3; }
 #editor { overflow: auto; border-right: 1px solid var(--rule); background: var(--base); }
 
 /* ── preview: this is the "printed" half, so it gets real book typography ── */
@@ -359,6 +375,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* ── right rail ──────────────────────────────────────────────────────── */
 
 #rail {
+  grid-column: 5;
   border-left: 1px solid var(--rule);
   background: color-mix(in srgb, var(--overlay) 55%, var(--base));
   overflow-y: auto;
@@ -491,11 +508,14 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 
 /* ── responsive ──────────────────────────────────────────────────────── */
 
-@media (max-width: 1180px) { body { grid-template-columns: 232px minmax(0, 1fr); } #rail { display: none; } }
+@media (max-width: 1180px) {
+  body { --rail-w: 0px; --rail-rz: 0px; }
+  #rail, #rz-rail { display: none; }
+}
 @media (max-width: 820px) {
-  body { grid-template-columns: 1fr; }
-  #sidebar { display: none; }
-  #split { grid-template-columns: 1fr; }
+  body { --sidebar-w: 0px; --sidebar-rz: 0px; --rail-w: 0px; --rail-rz: 0px; }
+  #sidebar, #rz-sidebar, #rail, #rz-rail, #rz-editor { display: none; }
+  #split { grid-template-columns: minmax(0, 1fr) 0 0; }
   #preview { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -531,7 +551,7 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 
 /* ── discover ────────────────────────────────────────────────────────── */
 
-#discover { grid-column: 2 / -1; overflow-y: auto; padding: 30px 34px 70px; background: var(--base); }
+#discover { grid-column: 3 / -1; overflow-y: auto; padding: 30px 34px 70px; background: var(--base); }
 #discover header { max-width: 640px; margin-bottom: 22px; }
 #discover h1 {
   font-family: var(--font-ui); font-size: 25px; font-weight: 660;
@@ -565,8 +585,13 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 .gallery-card footer { display: flex; align-items: center; gap: 7px; }
 .gallery-card .licence {
   margin-right: auto; font-size: 10.5px; color: var(--muted);
-  border: 1px solid var(--rule); border-radius: 20px; padding: 1px 8px; white-space: nowrap;
+  border: 1px solid var(--rule); border-radius: 20px; padding: 1px 8px;
+  /* The licence is the one thing here that may shrink: the actions must stay readable,
+     and a truncated "Apache-2.0" is still recognisable where a wrapped button is not. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.gallery-card footer .ghost-sm { white-space: nowrap; flex: none; }
+.gallery-card footer { flex-wrap: nowrap; }
 .ghost-sm {
   border: 1px solid var(--rule); border-radius: var(--r-sm);
   background: var(--base); color: var(--subtle);
@@ -590,7 +615,7 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
 
 body.discovering main, body.discovering #rail { display: none; }
-@media (max-width: 1180px) { #discover { grid-column: 2 / -1; } }
+@media (max-width: 1180px) { #discover { grid-column: 3 / -1; } }
 @media (max-width: 820px) { #discover { grid-column: 1 / -1; padding: 20px 16px 60px; } }
 
 .preview-source {
@@ -679,3 +704,68 @@ body.focus-mode #preview > * { margin-left: auto; margin-right: auto; }
 @media (max-width: 1080px) {
   #topbar { gap: 6px; padding: 8px 12px; }
 }
+
+/* ── discover tiles: clamped descriptions, source link ───────────────── */
+
+.gallery-card .desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: none;
+}
+.gallery-card .desc.expanded { -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+.see-more {
+  align-self: flex-start;
+  margin: -8px 0 12px;
+  padding: 0; border: 0; background: none;
+  color: var(--accent); font-size: 12px; font-weight: 560;
+}
+.see-more:hover { text-decoration: underline; text-underline-offset: 2px; }
+.gallery-card footer { margin-top: auto; }
+
+.icon-link {
+  display: grid; place-items: center;
+  width: 26px; height: 26px; flex: none;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: var(--base); color: var(--subtle);
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.icon-link svg { width: 14px; height: 14px; fill: currentColor; }
+.icon-link:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 24%, transparent); }
+
+/* ── resizers and panel collapsing ───────────────────────────────────── */
+
+#rz-sidebar { grid-column: 2; }
+#rz-rail { grid-column: 4; }
+
+.resizer {
+  position: relative;
+  cursor: col-resize;
+  background: var(--rule);
+  transition: background 0.16s var(--ease);
+}
+/* A 5px strip is hard to hit, so widen the *target* without widening the line. */
+.resizer::after {
+  content: ""; position: absolute; inset: 0 -4px; z-index: 5;
+}
+.resizer:hover, .resizer.dragging, .resizer:focus-visible {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  outline: none;
+}
+/* While dragging, stop the pointer selecting text. Pointer events stay enabled so the
+   window-level move handler keeps receiving them. */
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing * { cursor: col-resize !important; }
+
+body.sidebar-closed { --sidebar-w: 0px; --sidebar-rz: 0px; }
+body.sidebar-closed #sidebar, body.sidebar-closed #rz-sidebar { display: none; }
+body.rail-closed { --rail-w: 0px; --rail-rz: 0px; }
+body.rail-closed #rail, body.rail-closed #rz-rail { display: none; }
+
+.panel-toggle { margin-right: 2px; }
+.tool[aria-pressed="false"].panel-toggle { opacity: 0.75; }
+
+body.focus-mode #rz-sidebar, body.focus-mode #rz-rail, body.focus-mode #rz-editor { display: none; }
+@media print { .resizer { display: none !important; } }
