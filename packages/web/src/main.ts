@@ -104,6 +104,8 @@ let githubSearchOn = false;
 let display: DisplaySettings = loadSettings();
 let execEnabled = false;
 let historyEnabled = false;
+/** Set when this session was opened through a share link that limits what we may do. */
+let shareRole: "view" | "comment" | "edit" | null = null;
 let peer: PeerHandle | null = null;
 const driftByPath = new Map<string, string>();
 let replayFrames: Array<{ at: number; byAuthor: Record<string, number>; totalChars: number }> = [];
@@ -883,6 +885,9 @@ async function open(path: string): Promise<void> {
         EditorView.lineWrapping,
         yCollab(ytext, provider.awareness),
         suggestingExtension(),
+        // The server enforces this too; the editor reflects it so a reviewer is not
+        // typing into text that will be silently discarded.
+        EditorState.readOnly.of(shareRole === "view" || shareRole === "comment"),
         attributionTheme,
         attributionExtension(ytext, renderRail),
         EditorView.updateListener.of((u) => {
@@ -998,6 +1003,10 @@ exportBtn.onclick = () => {
         void copyRichText(previewEl.innerHTML, text()).then(() => toast("Copied with formatting"))),
       document.createElement("hr"),
       menuItem("Print", "or save as PDF", () => printDocument()),
+      menuItem("Provenance receipt", "a page you can share", () => {
+        // Opened rather than downloaded: the point is that it is a link.
+        window.open(`/api/receipt?doc=${encodeURIComponent(path)}`, "_blank", "noopener");
+      }),
     );
   });
 };
@@ -1040,6 +1049,35 @@ async function joinPeer(): Promise<void> {
     });
     await copyToClipboard(peer.invite);
     toast("Your reply is on the clipboard — send it back to them.");
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
+
+/**
+ * Ask someone to look at a document.
+ *
+ * This is the growth loop worth having: the invitation does the recruiting, and the
+ * reviewer needs no account, no install, and no explanation of what Quire is.
+ */
+async function requestReview(): Promise<void> {
+  if (!current) return;
+  const brief = window.prompt(
+    "What would you like them to look at?\n\n(They will see this, and can comment without an account.)",
+    "Does this read clearly?",
+  );
+  if (brief === null) return;
+
+  try {
+    const params = new URLSearchParams({ role: "comment", path: current, brief, by: me.name });
+    const share = await api<{ token: string }>(`/api/share?${params}`, { method: "POST" });
+    const link = new URL(location.href);
+    link.search = "";
+    link.searchParams.set("share", share.token);
+    link.searchParams.set("doc", current);
+    await copyToClipboard(link.toString());
+    toast("Review link copied. They can comment without signing up.");
   } catch (error) {
     toast((error as Error).message, true);
   }
@@ -1102,6 +1140,9 @@ shareBtn.onclick = () => {
       "Anyone with the link gets that access — there are no accounts, so the link is the key. " +
       "View is enforced by the server. Links die when the server stops.",
     ));
+
+    panel.append(document.createElement("hr"), heading("Request a review"));
+    panel.append(menuItem("Ask someone to review this", "no account needed", () => void requestReview()));
 
     panel.append(document.createElement("hr"), heading("Direct connection"));
     panel.append(menuItem("Invite a peer", "no server at all", () => void startPeerOffer()));
@@ -1230,6 +1271,55 @@ wireResizer($("#rz-sidebar"), "sidebar");
 wireResizer($("#rz-rail"), "rail");
 wireResizer($("#rz-editor"), "editor", splitEl);
 
+/**
+ * A review request opens the document with a brief and a limited role.
+ *
+ * The reviewer needs no account and installs nothing: the link is the credential, and the
+ * role attached to it is enforced by the server rather than by hiding buttons.
+ */
+async function applyShareLink(): Promise<void> {
+  const token = new URLSearchParams(location.search).get("share");
+  if (!token) return;
+
+  try {
+    const info = await api<{
+      role: "view" | "comment" | "edit";
+      path: string | null;
+      brief: string | null;
+      requestedBy: string | null;
+    }>(`/api/share/info?token=${encodeURIComponent(token)}`);
+
+    shareRole = info.role;
+    document.body.classList.toggle("commenting", info.role === "comment");
+
+    if (info.brief || info.role !== "edit") {
+      const banner = $("#review-banner");
+      $("#review-title").textContent = info.requestedBy
+        ? `${info.requestedBy} asked you to review this`
+        : info.brief
+          ? "You have been asked to review this"
+          : "You are viewing a shared document";
+      $("#review-brief").textContent =
+        info.brief ??
+        (info.role === "comment"
+          ? "You can leave comments. The text itself is not yours to change."
+          : "This link is read-only.");
+      $("#review-role").textContent =
+        info.role === "comment" ? "Comment access" : info.role === "view" ? "Read only" : "Edit access";
+      banner.hidden = false;
+    }
+
+    // Editing controls that cannot work under this role should not be offered.
+    if (info.role !== "edit") {
+      for (const id of ["#suggest-btn", "#snapshot-btn", "#share-btn"]) {
+        $<HTMLButtonElement>(id).hidden = true;
+      }
+    }
+  } catch {
+    toast("That share link is not valid, or has expired.", true);
+  }
+}
+
 async function boot(): Promise<void> {
   try {
     const info = await api<{
@@ -1248,6 +1338,7 @@ async function boot(): Promise<void> {
     return;
   }
 
+  await applyShareLink();
   await purgeStaleOfflineStores();
   snapshotBtn.hidden = !gitAvailable;
 
@@ -1269,7 +1360,9 @@ async function boot(): Promise<void> {
   renderFiles(allFiles);
   await refreshLinks().catch(() => {});
 
-  if (allFiles[0]) await open(allFiles[0]);
+  const wanted = new URLSearchParams(location.search).get("doc");
+  if (wanted && allFiles.includes(wanted)) await open(wanted);
+  else if (allFiles[0]) await open(allFiles[0]);
   else pathEl.textContent = "No Markdown files in this folder yet.";
 
   // Push, not poll: a file an agent or the registry just created should appear at once.

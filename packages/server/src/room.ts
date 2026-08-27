@@ -9,7 +9,7 @@ import {
   writeSyncStep2,
   writeUpdate,
 } from "y-protocols/sync";
-import { AgentBudget, type DocHandle, measureUpdate, readPolicy } from "@quire/bridge";
+import { AgentBudget, type DocHandle, isCommentOnlyUpdate, measureUpdate, readPolicy } from "@quire/bridge";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -135,6 +135,11 @@ export class Room {
           if (decoding.readVarUint(decoder) === messageYjsSyncStep1) {
             writeSyncStep2(encoder, this.handle.doc, decoding.readVarUint8Array(decoder));
           }
+        } else if (this.roles.get(socket) === "comment" && !this.admitComment(message)) {
+          // Comment links are enforced, not merely respected: an update that would touch
+          // the prose is dropped, and the holder is told why.
+          socket.send(this.notice("This link allows comments, not edits to the document."));
+          return;
         } else {
           const budget = this.budgets.get(socket);
           if (budget) {
@@ -142,16 +147,7 @@ export class Room {
             if (!verdict.allowed) {
               // Tell the agent why, so it can fall back to proposing rather than
               // silently believing its edit landed.
-              socket.send(
-                encoding.toUint8Array(
-                  (() => {
-                    const notice = encoding.createEncoder();
-                    encoding.writeVarUint(notice, MSG_NOTICE);
-                    encoding.writeVarString(notice, verdict.reason ?? "Refused");
-                    return notice;
-                  })(),
-                ),
-              );
+              socket.send(this.notice(verdict.reason ?? "Refused"));
               return;
             }
           }
@@ -188,6 +184,26 @@ export class Room {
       return budget.admit(measureUpdate(decoding.readVarUint8Array(peek)));
     } catch {
       return { allowed: false, reason: "Malformed update" };
+    }
+  }
+
+  private notice(message: string): Uint8Array {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_NOTICE);
+    encoding.writeVarString(encoder, message);
+    return encoding.toUint8Array(encoder);
+  }
+
+  /** True when this message only touches things a commenter is allowed to change. */
+  private admitComment(message: Uint8Array): boolean {
+    try {
+      const peek = decoding.createDecoder(message);
+      decoding.readVarUint(peek); // MSG_SYNC
+      const syncType = decoding.readVarUint(peek);
+      if (syncType !== SYNC_STEP_2 && syncType !== SYNC_UPDATE) return true;
+      return isCommentOnlyUpdate(decoding.readVarUint8Array(peek), this.handle.doc);
+    } catch {
+      return false;
     }
   }
 

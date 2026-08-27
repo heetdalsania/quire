@@ -195,3 +195,138 @@ export function isRangeLocked(
 ): Section | null {
   return lockedRanges(markdown, locked).find((s) => from < s.to && to > s.from) ?? null;
 }
+
+/**
+ * Which root types an update touches.
+ *
+ * This is what makes a comment-only link enforceable rather than advisory, and it is
+ * fiddlier than it looks. Yjs only encodes a parent's *name* for an item that has no
+ * neighbour; an insert made next to existing text carries an origin instead, and the
+ * parent is inferred at apply time from the item beside it. Classifying only the explicit
+ * names therefore sees nothing for virtually every real edit -- which reads as "touches
+ * nothing" and lets it straight through.
+ *
+ * So unnamed parents are resolved by following the origin back into the document, and
+ * anything still unresolved is reported as unknown. Deletions get the same treatment:
+ * they reference clock ranges rather than parents, so they are looked up too.
+ */
+export function updateTargets(update: Uint8Array, doc: Y.Doc): Set<string> {
+  const targets = new Set<string>();
+  try {
+    const decoded = Y.decodeUpdate(update);
+
+    for (const struct of decoded.structs) {
+      const name = resolveTarget(struct, doc, 0);
+      if (name) targets.add(name);
+    }
+
+    const clients = decoded.ds.clients as unknown as
+      | Map<number, Array<{ clock: number; len: number }>>
+      | Record<string, Array<{ clock: number; len: number }>>;
+    const buckets: Array<[number, Array<{ clock: number; len: number }>]> =
+      clients instanceof Map
+        ? [...clients.entries()]
+        : Object.entries(clients ?? {}).map(([k, v]) => [Number(k), v]);
+
+    for (const [clientId, ranges] of buckets) {
+      for (const range of ranges) {
+        for (let clock = range.clock; clock < range.clock + range.len; ) {
+          const found = structAt(doc, clientId, clock);
+          if (!found) {
+            // Deleting something this document has never seen is unattributable.
+            targets.add(UNKNOWN_TARGET);
+            break;
+          }
+          targets.add(resolveTarget(found, doc, 0) ?? UNKNOWN_TARGET);
+          clock = found.id.clock + Math.max(1, found.length);
+        }
+      }
+    }
+  } catch {
+    targets.add(UNKNOWN_TARGET);
+  }
+  return targets;
+}
+
+/** Reported when an update cannot be attributed to a root type. */
+export const UNKNOWN_TARGET = "?";
+
+interface StructLike {
+  id: { client: number; clock: number };
+  length: number;
+  parent?: unknown;
+  origin?: { client: number; clock: number } | null;
+  rightOrigin?: { client: number; clock: number } | null;
+}
+
+/** Find the struct covering a clock, by binary search over a client's ordered structs. */
+function structAt(doc: Y.Doc, client: number, clock: number): StructLike | null {
+  const structs = doc.store.clients.get(client) as unknown as StructLike[] | undefined;
+  if (!structs || structs.length === 0) return null;
+
+  let low = 0;
+  let high = structs.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const struct = structs[mid]!;
+    if (clock < struct.id.clock) high = mid - 1;
+    else if (clock >= struct.id.clock + struct.length) low = mid + 1;
+    else return struct;
+  }
+  return null;
+}
+
+/** The root type a struct belongs to, following origins when the parent is not encoded. */
+function resolveTarget(struct: unknown, doc: Y.Doc, depth: number): string | null {
+  if (depth > 24) return UNKNOWN_TARGET;
+  const item = struct as StructLike;
+
+  if (typeof item.parent === "string") return item.parent;
+  if (item.parent) return rootNameOf(item.parent, doc) ?? UNKNOWN_TARGET;
+
+  // No encoded parent: this item was inserted beside another, so ask that one.
+  for (const origin of [item.origin, item.rightOrigin]) {
+    if (!origin) continue;
+    const neighbour = structAt(doc, origin.client, origin.clock);
+    if (neighbour) return resolveTarget(neighbour, doc, depth + 1);
+  }
+  return null;
+}
+
+/** Walk up to the root type and report the name it is registered under. */
+function rootNameOf(type: unknown, doc: Y.Doc): string | null {
+  let current = type as { _item?: { parent?: unknown } | null } | null;
+  for (let depth = 0; current && depth < 32; depth++) {
+    const item = current._item;
+    if (!item) break;
+    current = item.parent as typeof current;
+  }
+  for (const [name, root] of doc.share.entries()) {
+    if (root === (current as unknown)) return name;
+  }
+  return null;
+}
+
+/** Root types a comment-only participant may write to. */
+export const COMMENT_ROLE_ROOTS = new Set(["comments", "authors"]);
+
+export function isCommentOnlyUpdate(update: Uint8Array, doc: Y.Doc): boolean {
+  const targets = updateTargets(update, doc);
+  // An update that classifies as nothing is either genuinely empty or something we could
+  // not read. Only the first is safe, so require it to be provably empty.
+  if (targets.size === 0) return isEmptyUpdate(update);
+  return [...targets].every((name) => COMMENT_ROLE_ROOTS.has(name));
+}
+
+/** True when an update carries neither content nor deletions. */
+function isEmptyUpdate(update: Uint8Array): boolean {
+  try {
+    const decoded = Y.decodeUpdate(update);
+    if (decoded.structs.length > 0) return false;
+    const clients = decoded.ds.clients as unknown as Map<number, unknown[]> | Record<string, unknown[]>;
+    const buckets = clients instanceof Map ? [...clients.values()] : Object.values(clients ?? {});
+    return buckets.every((ranges) => (ranges as unknown[]).length === 0);
+  } catch {
+    return false;
+  }
+}

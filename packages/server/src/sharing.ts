@@ -10,6 +10,9 @@ export interface Share {
   createdAt: number;
   expiresAt: number | null;
   label: string;
+  /** What the reviewer is being asked to look at. */
+  brief: string | null;
+  requestedBy: string | null;
 }
 
 /**
@@ -26,7 +29,14 @@ export interface Share {
 export class ShareRegistry {
   private readonly shares = new Map<string, Share>();
 
-  create(input: { role: ShareRole; path?: string | null; ttlMs?: number | null; label?: string }): Share {
+  create(input: {
+    role: ShareRole;
+    path?: string | null;
+    ttlMs?: number | null;
+    label?: string;
+    brief?: string | null;
+    requestedBy?: string | null;
+  }): Share {
     const token = randomBytes(18).toString("base64url");
     const share: Share = {
       token,
@@ -35,6 +45,8 @@ export class ShareRegistry {
       createdAt: Date.now(),
       expiresAt: input.ttlMs ? Date.now() + input.ttlMs : null,
       label: input.label ?? (input.path ?? "whole vault"),
+      brief: input.brief ?? null,
+      requestedBy: input.requestedBy ?? null,
     };
     this.shares.set(token, share);
     return share;

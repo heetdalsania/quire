@@ -1,6 +1,6 @@
 # Quire — Ideas
 
-**Status at a glance:** ideas 1–12 are **built and shipped**. Ideas 13–17 are **not built**.
+**Status at a glance:** ideas 1–14 and 16 are **built**. Ideas 15 and 17 are **not built**.
 
 The unbuilt ones lead. What already exists is recorded further down, with notes on where
 the implementation ended up differing from the proposal — those differences are usually the
@@ -26,7 +26,7 @@ which of those two engines they pull.
 
 ## Engine 1 — Artefacts people forward
 
-### 13. The receipt ★ build this first
+### 13. The receipt ✅ BUILT
 **What:** One command turns any document into a shareable page: *"This document is 71%
 human. Written over 3 days. 14 agent contributions, 9 accepted, 5 rejected."* With the
 replay embedded, so a visitor can watch it being written.
@@ -40,11 +40,15 @@ can claim.
 retroactively produce a receipt, because none recorded the data. Provenance already exists
 and is already tested — this is packaging, not invention.
 
-**Cost:** Low. A static page over data already collected.
+**Shipped:** `Export → Provenance receipt`, or `GET /api/receipt?doc=…`. Self-contained
+HTML, ~6 KB, no external requests. Replay embedded when `--history` is on, showing the
+committed text only — a receipt asserts what the file said, not proposals it never
+accepted. Required adding suggestion outcome logging, since acceptance and rejection
+cannot be reconstructed once the marks are gone.
 
 ---
 
-### 14. `quire replay --gif`
+### 14. `quire replay --gif` — not built
 **What:** Extend `tools/recorder` to render a document's replay as a GIF from the command
 line.
 
@@ -72,7 +76,7 @@ aggregation and honest presentation.
 
 ## Engine 2 — Using it requires a second person
 
-### 16. Review requests as the primary verb ★ build this second
+### 16. Review requests ✅ BUILT
 **What:** "Request review" produces a link that opens the document in comment mode with a
 short brief. The reviewer needs no account and installs nothing.
 
@@ -80,7 +84,12 @@ short brief. The reviewer needs no account and installs nothing.
 does the recruiting. Every review request is a demo delivered by a colleague rather than by
 marketing.
 
-**Cost:** Low. Capability links and comment mode both exist; this packages them into a verb.
+**Shipped:** `Share → Ask someone to review this`. The link carries a brief, opens the
+right document, and shows who asked. **Comment-only is now genuinely enforced**: the server
+classifies which root types an update touches and drops anything that would change the
+prose. That took resolving parents through item origins — Yjs only encodes a parent name
+for items with no neighbour, so the naive check saw "touches nothing" for virtually every
+real edit and let it straight through.
 
 ---
 

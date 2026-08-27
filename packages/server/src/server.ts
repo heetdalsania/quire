@@ -34,6 +34,7 @@ import {
   stripProvenanceHeader,
 } from "./lockfile.js";
 import { ExecRefused, formatResult, runBlock, supportedLanguages } from "./exec.js";
+import { collectReceipt, renderReceipt } from "./receipt.js";
 import { isRequestAllowed, isSafeDocPath } from "./security.js";
 import { ShareRegistry, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
@@ -338,13 +339,30 @@ export class QuireServer {
         path: path ?? null,
         ttlMs: hours > 0 ? hours * 3_600_000 : null,
         label: path ?? "whole vault",
+        brief: (url.searchParams.get("brief") ?? "").slice(0, 600) || null,
+        requestedBy: (url.searchParams.get("by") ?? "").slice(0, 80) || null,
       });
-      json({ token: share.token, role: share.role, path: share.path, expiresAt: share.expiresAt });
+      json({
+        token: share.token, role: share.role, path: share.path,
+        expiresAt: share.expiresAt, brief: share.brief,
+      });
       return;
     }
 
     if (url.pathname === "/api/share" && req.method === "GET") {
       json({ shares: this.shares.list() });
+      return;
+    }
+
+    if (url.pathname === "/api/share/info") {
+      // Holding the token is the permission, so this needs no further check -- and a
+      // reviewer must be able to read the brief before they can do anything else.
+      const share = this.shares.resolve(url.searchParams.get("token"));
+      if (!share) return json({ error: "This link is not valid, or has expired." }, 404);
+      json({
+        role: share.role, path: share.path, brief: share.brief,
+        requestedBy: share.requestedBy, expiresAt: share.expiresAt,
+      });
       return;
     }
 
@@ -561,6 +579,30 @@ export class QuireServer {
           error instanceof ExecRefused ? 403 : 500,
         );
       }
+      return;
+    }
+
+    if (url.pathname === "/api/receipt") {
+      const path = url.searchParams.get("doc") ?? "";
+      if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      const handle = this.vault.getDoc(path);
+      const data = collectReceipt(handle, {
+        // Replay frames are only available when history is retained.
+        replay: this.opts.history === true && url.searchParams.get("replay") !== "0",
+        maxFrames: 24,
+      });
+
+      if (url.searchParams.get("format") === "json") {
+        json(data);
+        return;
+      }
+      const html = renderReceipt(data);
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        // A receipt is meant to be saved and sent on, not viewed once.
+        "content-disposition": `inline; filename="${path.replace(/[^\w.-]/g, "_")}-receipt.html"`,
+      });
+      res.end(html);
       return;
     }
 

@@ -53,6 +53,8 @@ diff you read afterwards.
 | **Git snapshots** | Periodic commits on quiet. Git is the archive, never the transport |
 | **Discover** | Browse widely-used Markdown — agent configs, skills, conventions — and add it to your vault with provenance recorded. An index, not a host: files come from their own repositories |
 | **Live updates** | Files created by an agent, by Discover, or by another tool appear immediately |
+| **Provenance receipts** | One click turns a document into a shareable page: how much a person wrote, how much an agent did, which suggestions were accepted, and a replay of it being written. Self-contained HTML — no server, no account, works offline |
+| **Review requests** | Send a link with a brief. The reviewer comments without an account, and comment-only is enforced by the server rather than by hiding the editor |
 | **Suggesting mode** | People get the same suggest mode agents have. Your edits become proposals and stay off disk until accepted |
 | **Share links** | Capability links scoped to a file or the vault, with view / comment / edit. View is enforced server-side |
 | **Export** | Markdown, self-contained HTML, plain text, copy-with-formatting for pasting into Docs, and print or save as PDF |

@@ -897,3 +897,25 @@ body.replaying #editor .cm-content { opacity: 0.35; }
   border-left: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
   font-size: 12px; color: var(--subtle);
 }
+
+/* ── review request banner ───────────────────────────────────────────── */
+
+#review-banner[hidden] { display: none; }
+#review-banner {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+#review-banner strong { display: block; font-size: 13.5px; font-weight: 620; margin-bottom: 2px; }
+#review-brief { margin: 0; font-size: 13px; color: var(--subtle); line-height: 1.5; }
+#review-role {
+  margin-left: auto; flex: none;
+  padding: 3px 10px; border-radius: 20px;
+  background: var(--accent); color: var(--base);
+  font-size: 11px; font-weight: 640; white-space: nowrap;
+}
+/* In comment mode the prose is not yours to change, and the editor should say so before
+   you try rather than after the server refuses. */
+body.commenting #editor .cm-content { caret-color: transparent; }
+body.commenting #editor { opacity: 0.92; }

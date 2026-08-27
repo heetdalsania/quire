@@ -97,11 +97,51 @@ export function pendingSuggestions(text: Y.Text): string[] {
   return [...ids];
 }
 
+const OUTCOMES_KEY = "suggestionOutcomes";
+
+export interface SuggestionOutcome {
+  id: string;
+  authorId: string | null;
+  action: "accepted" | "rejected";
+  chars: number;
+  at: number;
+}
+
+/**
+ * Record what happened to a suggestion.
+ *
+ * Acceptance rate is the only honest measure of whether an agent is actually useful, and
+ * it cannot be reconstructed afterwards: once a suggestion is accepted or rejected, the
+ * marks that described it are gone.
+ */
+function recordOutcome(text: Y.Text, suggestionId: string, action: "accepted" | "rejected"): void {
+  const doc = text.doc;
+  if (!doc) return;
+  const affected = spans(text).filter(
+    (s) => s.suggestInsert === suggestionId || s.suggestDelete === suggestionId,
+  );
+  if (affected.length === 0) return;
+
+  const entry: SuggestionOutcome = {
+    id: suggestionId,
+    authorId: affected[0]?.author ?? null,
+    action,
+    chars: affected.reduce((sum, s) => sum + (s.to - s.from), 0),
+    at: Date.now(),
+  };
+  doc.getArray<SuggestionOutcome>(OUTCOMES_KEY).push([entry]);
+}
+
+export function suggestionOutcomes(doc: Y.Doc): SuggestionOutcome[] {
+  return [...doc.getArray<SuggestionOutcome>(OUTCOMES_KEY)];
+}
+
 /**
  * Accept a suggestion: proposed insertions become ordinary text (authorship is kept),
  * and proposed deletions actually delete.
  */
 export function acceptSuggestion(text: Y.Text, suggestionId: string): void {
+  recordOutcome(text, suggestionId, "accepted");
   text.doc?.transact(() => {
     // Right to left: deleting shifts every index after it.
     for (const span of spans(text).reverse()) {
@@ -116,6 +156,7 @@ export function acceptSuggestion(text: Y.Text, suggestionId: string): void {
 
 /** Reject a suggestion: proposed insertions are removed, proposed deletions are kept. */
 export function rejectSuggestion(text: Y.Text, suggestionId: string): void {
+  recordOutcome(text, suggestionId, "rejected");
   text.doc?.transact(() => {
     for (const span of spans(text).reverse()) {
       if (span.suggestInsert === suggestionId) {
