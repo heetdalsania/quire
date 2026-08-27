@@ -95,6 +95,8 @@ docker compose up --build
 | [DESIGN.md](./DESIGN.md) | Competitive landscape, architecture, the hard problems |
 | [BUSINESS.md](./BUSINESS.md) | Cost math, deployment, funding paths |
 | [MARKETING.md](./MARKETING.md) | Positioning, launch sequence, what to measure |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | How this reaches people, and what each route costs |
+| [IDEAS.md](./IDEAS.md) | Speculative features worth building, and what to avoid |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Architecture invariants — read before a large PR |
 | [SECURITY.md](./SECURITY.md) | Threat model and known limitations |
 | [tools/recorder](./tools/recorder) | Regenerates `docs/demo.gif` from the real app |
