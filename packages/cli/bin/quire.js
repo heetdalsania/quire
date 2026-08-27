@@ -16,6 +16,7 @@ if (args.includes("--help") || args.includes("-h")) {
     --allow-host <name>   Additionally trust this hostname (repeatable). Needed only
                           when deliberately exposing the vault, e.g. via a tunnel.
     --no-git              Disable periodic git snapshots
+    --no-discover         Disable the Discover tab (no outbound requests at all)
 
   Requests are refused unless they come from loopback or an allowed host, so a web page
   you happen to have open cannot reach into your vault.
@@ -33,6 +34,7 @@ const flag = (name, fallback) => {
 const positional = args.filter((a, i) => !a.startsWith("--") && !String(args[i - 1] ?? "").startsWith("--"));
 const root = resolve(positional[0] ?? process.cwd());
 const webRoot = resolve(here, "../../web/dist");
+const registryPath = resolve(here, "../../../registry/index.json");
 
 if (!existsSync(webRoot)) {
   console.error("Web client not built. Run: npm run build -w @quire/web");
@@ -51,6 +53,8 @@ const server = await QuireServer.start({
   host: flag("--host", "127.0.0.1"),
   allowedHosts,
   git: args.includes("--no-git") ? false : {},
+  // Discover is index-only: entries are fetched from their own repositories on request.
+  ...(args.includes("--no-discover") || !existsSync(registryPath) ? {} : { registryPath }),
 });
 
 const count = server.vault.list().length;

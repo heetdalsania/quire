@@ -26,6 +26,11 @@
         <span id="status" class="status"><i class="dot"></i><span class="status-text">connecting</span></span>
       </header>
 
+      <div class="modes" role="tablist" aria-label="Sections">
+        <button id="mode-vault" class="mode" role="tab" aria-selected="true">Vault</button>
+        <button id="mode-discover" class="mode" role="tab" aria-selected="false">Discover</button>
+      </div>
+
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" />
@@ -34,12 +39,21 @@
       </div>
 
       <nav id="files" aria-label="Documents"></nav>
+      <nav id="categories" aria-label="Categories" hidden></nav>
 
       <section id="backlinks-panel" hidden>
         <h2>Linked from</h2>
         <div id="backlinks"></div>
       </section>
     </aside>
+
+    <section id="discover" hidden>
+      <header>
+        <h1>Discover</h1>
+        <p id="discover-note"></p>
+      </header>
+      <div id="gallery"></div>
+    </section>
 
     <main>
       <div id="topbar">

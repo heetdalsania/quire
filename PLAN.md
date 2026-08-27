@@ -78,6 +78,13 @@ Do not relitigate these. Each was researched and chosen deliberately.
 **Permanently deferred** (each one is how this project dies): WYSIWYG, whiteboards, databases/tables,
 mobile apps, E2E encryption, plugin API, real-time collaborative diagrams.
 
+**Added 2026-08-26 — the platform direction.** The owner reframed Quire from a tool into a place:
+local agent-and-human editing *plus* human-to-human sharing *plus* a gallery of widely-used
+Markdown people can install. Phase 6 covers it. The scope-creep risk in §8 applies with full force,
+so the constraint is that each piece must be an **index or a link, never a service**: no hosting, no
+moderation queue, no accounts. Discover is built that way already — entries name a public repo and
+Quire fetches from the source, so submissions are pull requests, not uploads.
+
 ---
 
 ## 3. The critical path

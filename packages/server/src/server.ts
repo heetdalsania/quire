@@ -5,6 +5,14 @@ import { extname, join, normalize } from "node:path";
 import { WebSocketServer } from "ws";
 import { GitSnapshotter, type GitSnapshotOptions, Vault, type VaultOptions } from "@quire/bridge";
 import { buildLinkGraph } from "./links.js";
+import {
+  RegistryFetchError,
+  fetchEntry,
+  findEntry,
+  loadRegistry,
+  resolveInstallPath,
+  sourceUrl,
+} from "./registry.js";
 import { isRequestAllowed, isSafeDocPath } from "./security.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
@@ -21,6 +29,8 @@ export interface QuireServerOptions extends VaultOptions {
    * deliberately exposing the vault, e.g. through a tunnel.
    */
   allowedHosts?: string[];
+  /** Path to the registry index. Omit to disable Discover entirely. */
+  registryPath?: string;
 }
 
 const MIME: Record<string, string> = {
@@ -32,6 +42,9 @@ const MIME: Record<string, string> = {
 };
 
 export class QuireServer {
+  /** Open server-sent-event streams, used to push vault changes to connected clients. */
+  private readonly eventStreams = new Set<import("node:http").ServerResponse>();
+
   /** Identifies this process's document lineage; see Room.add. */
   readonly epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   /** Live rooms by document path. Exposed for tests and for embedding hosts. */
@@ -48,6 +61,24 @@ export class QuireServer {
     private readonly opts: QuireServerOptions,
   ) {
     this.git = opts.git === false ? null : new GitSnapshotter(vault, opts.git ?? {});
+
+    // Files created by an agent, by the registry, or by another tool used to require a
+    // reload before they appeared in the sidebar -- which reads as the app being stale
+    // exactly when something interesting just happened.
+    for (const event of ["doc:written", "doc:open", "doc:delete", "doc:rename"]) {
+      vault.on(event, () => this.publish("files"));
+    }
+  }
+
+  private publish(kind: string): void {
+    const payload = `data: ${JSON.stringify({ kind, files: this.vault.list() })}\n\n`;
+    for (const stream of this.eventStreams) {
+      try {
+        stream.write(payload);
+      } catch {
+        this.eventStreams.delete(stream);
+      }
+    }
   }
 
   static async start(options: QuireServerOptions): Promise<QuireServer> {
@@ -142,6 +173,72 @@ export class QuireServer {
       return;
     }
 
+    if (url.pathname === "/api/events") {
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      res.write(`data: ${JSON.stringify({ kind: "files", files: this.vault.list() })}\n\n`);
+      this.eventStreams.add(res);
+      req.on("close", () => this.eventStreams.delete(res));
+      return;
+    }
+
+    if (url.pathname === "/api/registry") {
+      if (!this.opts.registryPath) {
+        json({ available: false, categories: [], entries: [] });
+        return;
+      }
+      const index = await loadRegistry(this.opts.registryPath);
+      json({
+        available: true,
+        note: index.note,
+        categories: index.categories,
+        entries: index.entries.map((e) => ({ ...e, source: sourceUrl(e) })),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/registry/preview") {
+      const entry = this.opts.registryPath
+        ? findEntry(await loadRegistry(this.opts.registryPath), url.searchParams.get("id") ?? "")
+        : null;
+      if (!entry) return json({ error: "Unknown registry entry" }, 404);
+      try {
+        json({ content: await fetchEntry(entry), source: sourceUrl(entry) });
+      } catch (error) {
+        json({ error: (error as RegistryFetchError).message }, 502);
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/registry/install" && req.method === "POST") {
+      const entry = this.opts.registryPath
+        ? findEntry(await loadRegistry(this.opts.registryPath), url.searchParams.get("id") ?? "")
+        : null;
+      if (!entry) return json({ error: "Unknown registry entry" }, 404);
+
+      const target = resolveInstallPath(entry, url.searchParams.get("as") ?? undefined);
+      if (!target) return json({ error: "Unsafe install path" }, 400);
+      if (this.vault.list().includes(target)) {
+        return json({ error: `${target} already exists in this vault` }, 409);
+      }
+
+      try {
+        const content = await fetchEntry(entry);
+        // Write through the vault so the document is a live CRDT immediately, rather
+        // than a file that only becomes collaborative after the watcher notices it.
+        const handle = this.vault.getDoc(target);
+        handle.doc.transact(() => handle.text.insert(0, attribute(entry, content)));
+        await this.vault.flush();
+        json({ path: target });
+      } catch (error) {
+        json({ error: (error as RegistryFetchError).message }, 502);
+      }
+      return;
+    }
+
     if (url.pathname === "/api/links") {
       json(buildLinkGraph(this.documents()));
       return;
@@ -189,6 +286,8 @@ export class QuireServer {
   }
 
   async close(): Promise<void> {
+    for (const stream of this.eventStreams) stream.end();
+    this.eventStreams.clear();
     this.git?.stop();
     for (const room of this.rooms.values()) room.destroy();
     this.rooms.clear();
@@ -199,4 +298,20 @@ export class QuireServer {
     });
     await this.vault.close();
   }
+}
+
+/**
+ * Prepend provenance to an installed document.
+ *
+ * Someone reading this file in six months should be able to tell where it came from and
+ * under what terms, without going back to whoever installed it.
+ */
+function attribute(
+  entry: { title: string; byline: string; repo: string; license: string },
+  content: string,
+): string {
+  const header =
+    `<!-- Installed by Quire from ${entry.repo} (${entry.license}). ` +
+    `"${entry.title}" by ${entry.byline}. Source: https://github.com/${entry.repo} -->\n\n`;
+  return header + content;
 }

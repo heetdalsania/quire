@@ -17,7 +17,8 @@ npm install && npm run build
 node packages/cli/bin/quire.js ~/my-notes
 ```
 
-No account. No signup. No network calls. Binds `127.0.0.1` by default.
+No account. No signup. Binds `127.0.0.1` by default. The only outbound request Quire ever makes
+is fetching a document you explicitly ask for in Discover — `--no-discover` removes even that.
 
 ## Where it sits
 
@@ -50,6 +51,8 @@ diff you read afterwards.
 | **Search** | ripgrep-backed, with an in-process fallback |
 | **Mermaid** | Rendered in the live preview |
 | **Git snapshots** | Periodic commits on quiet. Git is the archive, never the transport |
+| **Discover** | Browse widely-used Markdown — agent configs, skills, conventions — and add it to your vault with provenance recorded. An index, not a host: files come from their own repositories |
+| **Live updates** | Files created by an agent, by Discover, or by another tool appear immediately |
 
 ## Connecting an agent
 

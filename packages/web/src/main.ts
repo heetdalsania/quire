@@ -13,6 +13,7 @@ import {
   isAttributionVisible,
   setAttributionVisible,
 } from "./decorations.js";
+import { type Registry, type RegistryEntry, renderGallery } from "./discover.js";
 import { onColorSchemeChange, renderPreview } from "./preview.js";
 import { SyncProvider } from "./provider.js";
 import {
@@ -54,6 +55,12 @@ const commentBtn = $<HTMLButtonElement>("#comment-btn");
 const attrBtn = $<HTMLButtonElement>("#attr-btn");
 const snapshotBtn = $<HTMLButtonElement>("#snapshot-btn");
 const sugCount = $("#sug-count");
+const modeVaultBtn = $<HTMLButtonElement>("#mode-vault");
+const modeDiscoverBtn = $<HTMLButtonElement>("#mode-discover");
+const categoriesEl = $("#categories");
+const galleryEl = $("#gallery");
+const discoverEl = $("#discover");
+const discoverNoteEl = $("#discover-note");
 const cmtCount = $("#cmt-count");
 
 let view: EditorView | null = null;
@@ -68,6 +75,9 @@ let links: { backlinks: Record<string, string[]> } = { backlinks: {} };
 /** Server lineage. Local offline state is scoped to it -- see openPersistence. */
 let epoch = "";
 let gitAvailable = false;
+let registry: Registry = { available: false, categories: [], entries: [] };
+let mode: "vault" | "discover" = "vault";
+let activeCategory: string | null = null;
 
 /**
  * Offline state is namespaced by server epoch.
@@ -130,7 +140,8 @@ function renderFiles(files: string[], hits?: Map<string, string>): void {
 
 function renderBacklinks(): void {
   const incoming = current ? (links.backlinks[current] ?? []) : [];
-  backlinksPanel.hidden = incoming.length === 0;
+  backlinksPanel.dataset.empty = String(incoming.length === 0);
+  backlinksPanel.hidden = incoming.length === 0 || mode === "discover";
   backlinksEl.replaceChildren(
     ...incoming.map((path) => {
       const a = document.createElement("button");
@@ -146,6 +157,7 @@ let searchTimer: number | undefined;
 searchEl.oninput = () => {
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(async () => {
+    if (mode === "discover") return paintGallery();
     const q = searchEl.value.trim();
     if (!q) return renderFiles(allFiles);
     const { results } = await api<{ results: Array<{ path: string; line: number; text: string }> }>(
@@ -155,6 +167,113 @@ searchEl.oninput = () => {
     for (const r of results) if (!hits.has(r.path)) hits.set(r.path, r.text.trim().slice(0, 80));
     renderFiles([...hits.keys()], hits);
   }, 160);
+};
+
+// ---------------------------------------------------------------- discover
+
+function toast(message: string, bad = false): void {
+  document.querySelector(".toast")?.remove();
+  const el = document.createElement("div");
+  el.className = bad ? "toast bad" : "toast";
+  el.textContent = message;
+  document.body.append(el);
+  setTimeout(() => el.remove(), bad ? 6000 : 3600);
+}
+
+function renderCategories(): void {
+  const all = document.createElement("button");
+  all.textContent = "Everything";
+  const count = document.createElement("small");
+  count.textContent = `${registry.entries.length} documents`;
+  all.append(count);
+  if (activeCategory === null) all.setAttribute("aria-current", "true");
+  all.onclick = () => { activeCategory = null; renderCategories(); paintGallery(); };
+
+  categoriesEl.replaceChildren(
+    all,
+    ...registry.categories.map((cat) => {
+      const button = document.createElement("button");
+      button.textContent = cat.label;
+      const blurb = document.createElement("small");
+      blurb.textContent = cat.blurb;
+      button.append(blurb);
+      if (activeCategory === cat.id) button.setAttribute("aria-current", "true");
+      button.onclick = () => { activeCategory = cat.id; renderCategories(); paintGallery(); };
+      return button;
+    }),
+  );
+}
+
+function paintGallery(): void {
+  renderGallery(galleryEl, registry, { category: activeCategory, query: searchEl.value }, {
+    installed: (entry) => allFiles.includes(entry.installAs),
+    onPreview: (entry) => void previewEntry(entry),
+    onInstall: (entry) => void installEntry(entry),
+  });
+}
+
+/** Read a registry document before committing to it. Fetched by the server, not the page. */
+async function previewEntry(entry: RegistryEntry): Promise<void> {
+  toast(`Fetching ${entry.title} from ${entry.repo}…`);
+  try {
+    const { content, error } = await api<{ content?: string; error?: string }>(
+      `/api/registry/preview?id=${encodeURIComponent(entry.id)}`,
+    );
+    if (!content) throw new Error(error ?? "No content returned");
+    document.querySelector(".toast")?.remove();
+    setMode("vault");
+    pathEl.textContent = `${entry.repo} · preview (not saved)`;
+    view?.destroy();
+    view = null;
+    await renderPreview(previewEl, content.slice(0, 200_000), {
+      resolveLink: () => null,
+      onNavigate: () => {},
+    });
+    editorEl.replaceChildren(
+      Object.assign(document.createElement("pre"), {
+        className: "preview-source",
+        textContent: content.slice(0, 200_000),
+      }),
+    );
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
+async function installEntry(entry: RegistryEntry): Promise<void> {
+  toast(`Adding ${entry.title}…`);
+  try {
+    const result = await api<{ path?: string; error?: string }>(
+      `/api/registry/install?id=${encodeURIComponent(entry.id)}`,
+      { method: "POST" },
+    );
+    if (!result.path) throw new Error(result.error ?? "Install failed");
+    toast(`Saved to ${result.path}`);
+    paintGallery();
+    setMode("vault");
+    await open(result.path);
+  } catch (error) {
+    toast((error as Error).message, true);
+  }
+}
+
+function setMode(next: "vault" | "discover"): void {
+  mode = next;
+  document.body.classList.toggle("discovering", next === "discover");
+  discoverEl.hidden = next !== "discover";
+  filesEl.hidden = next === "discover";
+  categoriesEl.hidden = next !== "discover";
+  backlinksPanel.hidden = next === "discover" || backlinksPanel.dataset.empty === "true";
+  modeVaultBtn.setAttribute("aria-selected", String(next === "vault"));
+  modeDiscoverBtn.setAttribute("aria-selected", String(next === "discover"));
+  searchEl.placeholder = next === "discover" ? "Search Discover" : "Search the vault";
+  if (next === "discover") paintGallery();
+}
+
+modeVaultBtn.onclick = () => setMode("vault");
+modeDiscoverBtn.onclick = () => {
+  if (!registry.available) return toast("Discover is disabled (started with --no-discover).", true);
+  setMode("discover");
 };
 
 // ---------------------------------------------------------------- presence
@@ -513,14 +632,33 @@ async function boot(): Promise<void> {
   await purgeStaleOfflineStores();
   snapshotBtn.hidden = !gitAvailable;
 
+  registry = await api<Registry>("/api/registry").catch(() => registry);
+  modeDiscoverBtn.hidden = !registry.available;
+  if (registry.available) {
+    discoverNoteEl.textContent = registry.note ?? "";
+    renderCategories();
+  }
+
   renderFiles(allFiles);
   await refreshLinks().catch(() => {});
 
   if (allFiles[0]) await open(allFiles[0]);
   else pathEl.textContent = "No Markdown files in this folder yet.";
 
+  // Push, not poll: a file an agent or the registry just created should appear at once.
+  const events = new EventSource("/api/events");
+  events.onmessage = (message) => {
+    const data = JSON.parse(message.data) as { kind: string; files: string[] };
+    if (data.kind !== "files") return;
+    const changed = data.files.join("\u0000") !== allFiles.join("\u0000");
+    if (!changed) return;
+    allFiles = data.files;
+    if (mode === "discover") paintGallery();
+    else if (!searchEl.value.trim()) renderFiles(allFiles);
+    void refreshLinks().catch(() => {});
+  };
+
   onColorSchemeChange(() => void paintPreview());
-  setInterval(() => void refreshLinks().catch(() => {}), 15_000);
 }
 
 await boot();

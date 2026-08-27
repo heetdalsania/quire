@@ -4,7 +4,12 @@
 
 Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its own origin.
 
-- **No telemetry, no analytics, no phone-home.** Nothing leaves the machine.
+- **No telemetry, no analytics, no phone-home.** Quire never reports on you.
+- **Exactly one outbound request, and only on request.** Installing or previewing a document
+  from **Discover** fetches it from `raw.githubusercontent.com`. Nothing else in Quire touches the
+  network, the URL is derived from the bundled registry index rather than from the caller, and the
+  host is pinned so the endpoint cannot be turned into a general-purpose fetcher for your machine's
+  network position. Start with `--no-discover` for a build that makes no outbound requests at all.
 - **No accounts.** Identity is a display name generated in your browser.
 - **Requests are origin-checked.** Browsers permit cross-origin WebSocket upgrades with no
   preflight, and a cross-origin `GET /api/files` needs no CORS approval to be *sent*. Without a
@@ -29,6 +34,9 @@ Only do this on a network you trust, or behind something that provides authentic
 - **Documents load eagerly at startup.** A vault with many thousands of files will use
   proportional memory.
 - **Suggestions are advisory.** Any connected client can accept one; there is no reviewer role.
+- **Registry documents are third-party content.** Quire records where each installed file came
+  from and under what licence, but does not vet it. A `CLAUDE.md` you install changes how agents
+  behave in that directory — read it before you rely on it.
 
 ## Reporting
 
