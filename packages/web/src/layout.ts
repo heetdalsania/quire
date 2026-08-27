@@ -15,6 +15,7 @@ export interface Layout {
   editor: number | null;
   sidebarOpen: boolean;
   railOpen: boolean;
+  editorOpen: boolean;
 }
 
 export const LAYOUT_DEFAULTS: Layout = {
@@ -23,6 +24,7 @@ export const LAYOUT_DEFAULTS: Layout = {
   editor: null,
   sidebarOpen: true,
   railOpen: true,
+  editorOpen: true,
 };
 
 const KEY = "quire:layout";
@@ -61,10 +63,11 @@ export function applyLayout(): void {
   root.style.setProperty("--editor-w", layout.editor === null ? "1fr" : `${layout.editor}px`);
   document.body.classList.toggle("sidebar-closed", !layout.sidebarOpen);
   document.body.classList.toggle("rail-closed", !layout.railOpen);
+  document.body.classList.toggle("editor-closed", !layout.editorOpen);
 }
 
-export function togglePanel(which: "sidebar" | "rail"): boolean {
-  const key = which === "sidebar" ? "sidebarOpen" : "railOpen";
+export function togglePanel(which: "sidebar" | "rail" | "editor"): boolean {
+  const key = `${which}Open` as "sidebarOpen" | "railOpen" | "editorOpen";
   layout = { ...layout, [key]: !layout[key] };
   applyLayout();
   persist();

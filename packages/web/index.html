@@ -13,6 +13,10 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <button id="sidebar-stub" class="stub" aria-label="Show the sidebar" title="Show sidebar (Cmd+\)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+    </button>
+
     <aside id="sidebar">
       <header>
         <span class="mark" aria-hidden="true">
@@ -24,6 +28,9 @@
         </span>
         <span class="brand">Quire</span>
         <span id="status" class="status"><i class="dot"></i><span class="status-text">connecting</span></span>
+        <button id="close-sidebar" class="panel-close" aria-label="Hide the sidebar" title="Hide sidebar (Cmd+\)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5"/></svg>
+        </button>
       </header>
 
       <div class="modes" role="tablist" aria-label="Sections">
@@ -59,9 +66,6 @@
 
     <main>
       <div id="topbar">
-        <button id="toggle-sidebar" class="tool panel-toggle" aria-label="Show or hide the sidebar" title="Sidebar (Cmd+\)">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>
-        </button>
         <span id="docpath"></span>
         <div class="toolgroup">
           <button id="comment-btn" class="tool" aria-label="Comment on selection" disabled title="Comment on the selected text">
@@ -88,9 +92,6 @@
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 7.2 8 10.4l3-3.2M2.5 13h11" /></svg>
             <span>Export</span>
           </button>
-          <button id="toggle-rail" class="tool" aria-label="Show or hide the comments panel" title="Comments panel (Cmd+Shift+\)">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg>
-          </button>
           <button id="display-btn" class="tool" aria-label="Typography and theme" title="Typography and theme">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12.5 6.6 3.5h1.2l3.6 9M4.6 9.6h5.4M13 12.5V7" /></svg>
             <span>Display</span>
@@ -100,7 +101,14 @@
       </div>
 
       <div id="split">
-        <div id="editor"></div>
+        <button id="editor-stub" class="stub" aria-label="Show the Markdown source" title="Show source (Cmd+Shift+E)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+        </button>
+        <div id="editor">
+          <button id="close-editor" class="panel-close floating" aria-label="Hide the Markdown source" title="Hide source (Cmd+Shift+E)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5"/></svg>
+          </button>
+        </div>
         <div class="resizer" id="rz-editor" aria-label="Resize the editor" aria-orientation="vertical"></div>
         <article id="preview"></article>
       </div>
@@ -108,7 +116,14 @@
 
     <div class="resizer" id="rz-rail" aria-label="Resize the comments panel" aria-orientation="vertical"></div>
 
+    <button id="rail-stub" class="stub" aria-label="Show comments and suggestions" title="Show panel (Cmd+Shift+\)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5"/></svg>
+    </button>
+
     <aside id="rail">
+      <button id="close-rail" class="panel-close rail-close" aria-label="Hide comments and suggestions" title="Hide panel (Cmd+Shift+\)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+      </button>
       <section>
         <h2>Suggestions <span id="sug-count" class="count">0</span></h2>
         <div id="suggestions"></div>

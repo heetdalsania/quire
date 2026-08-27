@@ -71,8 +71,6 @@ const suggestBtn = $<HTMLButtonElement>("#suggest-btn");
 const shareBtn = $<HTMLButtonElement>("#share-btn");
 const exportBtn = $<HTMLButtonElement>("#export-btn");
 const displayBtn = $<HTMLButtonElement>("#display-btn");
-const toggleSidebarBtn = $<HTMLButtonElement>("#toggle-sidebar");
-const toggleRailBtn = $<HTMLButtonElement>("#toggle-rail");
 const splitEl = $("#split");
 const modeVaultBtn = $<HTMLButtonElement>("#mode-vault");
 const modeDiscoverBtn = $<HTMLButtonElement>("#mode-discover");
@@ -877,9 +875,10 @@ window.addEventListener("keydown", (event) => {
     suggestBtn.click();
   } else if (mod && event.key === "\\") {
     event.preventDefault();
-    if (event.shiftKey) togglePanel("rail");
-    else togglePanel("sidebar");
-    syncPanelButtons();
+    togglePanel(event.shiftKey ? "rail" : "sidebar");
+  } else if (mod && event.shiftKey && event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    togglePanel("editor");
   } else if (mod && event.key.toLowerCase() === "p") {
     event.preventDefault();
     printDocument();
@@ -899,13 +898,17 @@ suggestBtn.setAttribute("aria-pressed", "false");
 // Panels: restore the saved arrangement, then make the dividers draggable.
 loadLayout();
 applyLayout();
-const syncPanelButtons = (): void => {
-  toggleSidebarBtn.setAttribute("aria-pressed", String(getLayout().sidebarOpen));
-  toggleRailBtn.setAttribute("aria-pressed", String(getLayout().railOpen));
-};
-syncPanelButtons();
-toggleSidebarBtn.onclick = () => { togglePanel("sidebar"); syncPanelButtons(); };
-toggleRailBtn.onclick = () => { togglePanel("rail"); syncPanelButtons(); };
+// Each panel closes itself; a stub at the edge brings it back.
+for (const [selector, panel] of [
+  ["#close-sidebar", "sidebar"],
+  ["#sidebar-stub", "sidebar"],
+  ["#close-rail", "rail"],
+  ["#rail-stub", "rail"],
+  ["#close-editor", "editor"],
+  ["#editor-stub", "editor"],
+] as const) {
+  $<HTMLButtonElement>(selector).onclick = () => togglePanel(panel);
+}
 wireResizer($("#rz-sidebar"), "sidebar");
 wireResizer($("#rz-rail"), "rail");
 wireResizer($("#rz-editor"), "editor", splitEl);
