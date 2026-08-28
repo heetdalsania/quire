@@ -7,6 +7,26 @@ on:
 
 jobs:
   test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The filesystem bridge is the riskiest part of Quire and watchers differ by
+        # platform, so it is worth proving on more than one.
+        os: [ubuntu-latest, macos-latest]
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  release-bundle:
+    # Proves the published package actually starts, which the test suite does not.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,5 +35,31 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - run: npm run build:release
+      - run: npm run check:release
+      - name: Install the packed tarball and run it
+        run: |
+          cd packages/cli && npm pack --silent
+          mkdir -p /tmp/smoke/vault && cd /tmp/smoke
+          npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE"/packages/cli/quire-*.tgz --silent
+          printf '# Smoke\n\nhello\n' > vault/smoke.md
+          ./node_modules/.bin/quire vault --port 4321 --no-git &
+          sleep 5
+          curl -fsS http://127.0.0.1:4321/api/files | grep -q smoke.md
+          curl -fsS http://127.0.0.1:4321/ | grep -q '<title>Quire</title>'
+          echo "packaged binary serves the vault"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t quire:ci .
+      - name: Run it against a vault
+        run: |
+          mkdir -p /tmp/vault && printf '# Docker\n\nhello\n' > /tmp/vault/d.md
+          docker run -d --name quire -p 4321:4321 -v /tmp/vault:/vault quire:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4321/api/files && break || sleep 1; done
+          curl -fsS http://127.0.0.1:4321/api/files | grep -q d.md
+          docker logs quire

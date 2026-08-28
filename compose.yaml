@@ -1,9 +1,10 @@
 services:
   quire:
     build: .
+    # Bound to loopback deliberately. Quire has no authentication: anyone who can reach
+    # this port can read and edit every document. See SECURITY.md before widening it.
     ports:
       - "127.0.0.1:4321:4321"
     volumes:
-      # Point this at your own Markdown folder.
       - ./vault:/vault
     restart: unless-stopped

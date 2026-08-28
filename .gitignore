@@ -7,3 +7,13 @@ coverage/
 .env.*
 !.env.example
 .quire/
+
+# Release bundle, assembled by scripts/build-release.mjs
+packages/cli/dist/
+packages/cli/web/
+packages/cli/registry/
+packages/cli/README.md
+packages/cli/LICENSE
+packages/cli/SECURITY.md
+packages/cli/.npmignore
+*.tgz

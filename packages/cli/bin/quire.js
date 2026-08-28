@@ -5,6 +5,15 @@ import { fileURLToPath } from "node:url";
 import { QuireServer } from "@quire/server";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Find an asset in both layouts.
+ *
+ * In the repository the web client and registry live in sibling packages; in the published
+ * package they sit beside the bundled entry point. Checking both means one binary works
+ * from a clone and from `npx quire` without a build-time substitution.
+ */
+const locate = (...candidates) => candidates.map((c) => resolve(here, c)).find(existsSync) ?? null;
 const args = process.argv.slice(2);
 
 if (args.includes("--help") || args.includes("-h")) {
@@ -42,11 +51,11 @@ const flag = (name, fallback) => {
 
 const positional = args.filter((a, i) => !a.startsWith("--") && !String(args[i - 1] ?? "").startsWith("--"));
 const root = resolve(positional[0] ?? process.cwd());
-const webRoot = resolve(here, "../../web/dist");
-const registryPath = resolve(here, "../../../registry/index.json");
+const webRoot = locate("../web", "../../web/dist");
+const registryPath = locate("../registry/index.json", "../../../registry/index.json");
 
-if (!existsSync(webRoot)) {
-  console.error("Web client not built. Run: npm run build -w @quire/web");
+if (!webRoot) {
+  console.error("Web client not found. From a clone, run: npm run build");
   process.exit(1);
 }
 
@@ -63,7 +72,7 @@ const server = await QuireServer.start({
   allowedHosts,
   git: args.includes("--no-git") ? false : {},
   // Discover is index-only: entries are fetched from their own repositories on request.
-  ...(args.includes("--no-discover") || !existsSync(registryPath) ? {} : { registryPath }),
+  ...(args.includes("--no-discover") || !registryPath ? {} : { registryPath }),
   githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
   allowExec: args.includes("--allow-exec"),
   history: args.includes("--history"),

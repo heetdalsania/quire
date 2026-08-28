@@ -13,10 +13,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --build --pretty",
-    "start": "node packages/cli/bin/quire.js"
+    "start": "node packages/cli/bin/quire.js",
+    "build:release": "npm run build && node scripts/build-release.mjs",
+    "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

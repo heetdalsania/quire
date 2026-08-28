@@ -1,5 +1,45 @@
 {
-  "name": "quire", "version": "0.0.0", "private": true, "type": "module",
-  "license": "AGPL-3.0-or-later", "bin": { "quire": "./bin/quire.js" },
-  "dependencies": { "@quire/server": "*" }
+  "name": "quire",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "bin": {
+    "quire": "./dist/quire.js",
+    "quire-mcp": "./dist/quire-mcp.js"
+  },
+  "description": "Google Docs for Markdown - real-time collaborative editing over plain .md files, with AI agents as live collaborators.",
+  "files": [
+    "dist/",
+    "web/",
+    "registry/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "markdown",
+    "collaborative",
+    "crdt",
+    "yjs",
+    "local-first",
+    "mcp",
+    "ai-agents",
+    "editor",
+    "self-hosted",
+    "provenance"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quiredocs/quire.git"
+  },
+  "homepage": "https://github.com/quiredocs/quire",
+  "bugs": {
+    "url": "https://github.com/quiredocs/quire/issues"
+  },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/check-release.mjs"
+  }
 }

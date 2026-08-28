@@ -13,6 +13,12 @@ proposes a change that never touches the file until it is accepted, and then aut
 revealed. Nobody reloads, and nothing conflicts.*
 
 ```bash
+npx quire ~/my-notes
+```
+
+Or from a clone:
+
+```bash
 npm install && npm run build
 node packages/cli/bin/quire.js ~/my-notes
 ```
@@ -68,7 +74,7 @@ diff you read afterwards.
 Run the vault, then point any MCP client at it:
 
 ```bash
-node packages/mcp/bin/quire-mcp.js --url http://127.0.0.1:4321 --name Claude
+npx -p quire quire-mcp --url http://127.0.0.1:4321 --name Claude
 ```
 
 Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `append_document`,
@@ -90,6 +96,20 @@ edit everything". See [SECURITY.md](./SECURITY.md).
 docker compose up --build
 ```
 
+The container binds to `127.0.0.1` deliberately. Quire has no authentication, so anyone who
+can reach the port can read and edit every document — read [SECURITY.md](./SECURITY.md)
+before widening that.
+
+## Connecting an agent
+
+```bash
+npx quire ~/my-notes            # in one terminal
+npx -p quire quire-mcp --url http://127.0.0.1:4321
+```
+
+Point any MCP client at `quire-mcp`. The agent joins each document's live session as a
+peer, and is leashed by the document's own policy.
+
 ## Documents
 
 | File | What's in it |
@@ -102,6 +122,8 @@ docker compose up --build
 | [IDEAS.md](./IDEAS.md) | Speculative features worth building, and what to avoid |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Architecture invariants — read before a large PR |
 | [SECURITY.md](./SECURITY.md) | Threat model and known limitations |
+| [RELEASING.md](./RELEASING.md) | How to build, verify and publish a release |
+| [CHANGELOG.md](./CHANGELOG.md) | What is in each version |
 | [tools/recorder](./tools/recorder) | Regenerates `docs/demo.gif` from the real app |
 
 ## Licence

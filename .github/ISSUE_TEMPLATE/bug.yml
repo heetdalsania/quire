@@ -1,0 +1,33 @@
+name: Bug report
+description: Something behaved differently from what it promised.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Quire version
+      placeholder: "quire --help prints nothing useful yet; `npm ls quire` or the tag you cloned"
+    validations: { required: true }
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it
+      options: [npx quire, cloned repository, Docker, other]
+    validations: { required: true }
+  - type: textarea
+    id: flags
+    attributes:
+      label: Flags
+      description: The full command. Whether --history, --allow-exec or --host were set changes a lot.
+      placeholder: quire ~/notes --history
+  - type: textarea
+    id: env
+    attributes:
+      label: Node version and OS
+      placeholder: "node -v, and macOS 15 / Ubuntu 24.04 / Windows 11"
