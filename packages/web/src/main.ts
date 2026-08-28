@@ -14,6 +14,7 @@ import {
   setAttributionVisible,
 } from "./decorations.js";
 import { type DisplaySettings, applySettings, loadSettings, saveSettings } from "./display.js";
+import { THEMES, applyTheme, resolveTheme } from "./themes.js";
 import { type Registry, type RegistryEntry, renderGallery } from "./discover.js";
 import {
   copyRichText,
@@ -1150,24 +1151,74 @@ shareBtn.onclick = () => {
   });
 };
 
+
+/**
+ * The theme picker.
+ *
+ * Each option previews itself: the swatch is painted with that theme's own ground, accent
+ * and agent colours, so the choice is made by eye rather than by reading names. "System"
+ * leads because it is the only option that changes with the time of day.
+ */
+function themePicker(current: string, onPick: (id: string) => void): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "theme-grid";
+
+  const option = (id: string, name: string, note: string, colors: string[]): HTMLElement => {
+    const button = document.createElement("button");
+    button.className = "theme-swatch";
+    button.type = "button";
+    button.title = note;
+    button.setAttribute("aria-pressed", String(current === id));
+
+    const chips = document.createElement("span");
+    chips.className = "chips";
+    for (const colour of colors) {
+      const chip = document.createElement("i");
+      chip.style.background = colour;
+      chips.append(chip);
+    }
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = name;
+
+    button.append(chips, label);
+    button.onclick = () => {
+      for (const sibling of wrap.querySelectorAll("[aria-pressed]")) {
+        sibling.setAttribute("aria-pressed", "false");
+      }
+      button.setAttribute("aria-pressed", "true");
+      onPick(id);
+    };
+    return button;
+  };
+
+  const auto = resolveTheme("system");
+  wrap.append(
+    option("system", "System", `Follows your device — currently ${auto.name}.`, [
+      auto.colors.base, auto.colors.iris, auto.colors.gold, auto.colors.text,
+    ]),
+    ...THEMES.map((theme) =>
+      option(theme.id, theme.name, theme.note, [
+        theme.colors.base, theme.colors.iris, theme.colors.gold, theme.colors.text,
+      ]),
+    ),
+  );
+  return wrap;
+}
+
 displayBtn.onclick = () => {
   openMenu(displayBtn, (panel) => {
     const update = (patch: Partial<DisplaySettings>): void => {
       display = { ...display, ...patch };
       applySettings(display);
+      if (patch.theme !== undefined) applyTheme(resolveTheme(display.theme));
       saveSettings(display);
     };
     panel.append(
+      heading("Theme"),
+      themePicker(display.theme, (theme) => update({ theme })),
+      document.createElement("hr"),
       heading("Reading"),
-      row("Theme", segmented(
-        [
-          { value: "system" as const, label: "Auto" },
-          { value: "light" as const, label: "Light" },
-          { value: "dark" as const, label: "Dark" },
-        ],
-        display.theme,
-        (theme) => update({ theme }),
-      )),
       row("Prose", segmented(
         [
           { value: "serif" as const, label: "Serif" },
@@ -1251,6 +1302,11 @@ window.addEventListener("keydown", (event) => {
 });
 
 applySettings(display);
+applyTheme(resolveTheme(display.theme));
+// Only relevant while the preference is "system"; harmless otherwise.
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (display.theme === "system") applyTheme(resolveTheme("system"));
+});
 suggestBtn.setAttribute("aria-pressed", "false");
 
 // Panels: restore the saved arrangement, then make the dividers draggable.

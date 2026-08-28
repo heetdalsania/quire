@@ -36,6 +36,14 @@ files behind your back.
   index, not a host: files are fetched from their own repositories, with provenance
   recorded and drift from upstream tracked in `quire.lock`.
 
+### Appearance
+- Sixteen themes, including both classics and published palettes used at their real values.
+- Text-bearing roles are contrast-corrected per theme at runtime: published palettes are
+  built for syntax highlighting, where the lowest greys are comments nobody reads, and
+  mapping them straight onto prose left secondary text illegible in most of them.
+- Typography controls for prose and editor faces, size, leading and measure, plus a focus
+  mode. All display-only — none of it changes a byte of the file.
+
 ### Notable defaults
 - Binds `127.0.0.1`, refuses cross-origin requests, no telemetry, no accounts.
 - Edit history is **off** (`--history`): retaining it makes state grow with edit volume.

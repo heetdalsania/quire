@@ -15,7 +15,8 @@ export interface DisplaySettings {
   fontSize: number;
   lineHeight: number;
   measure: number;
-  theme: "system" | "light" | "dark";
+  /** A theme id from themes.ts, or "system" to follow the operating system. */
+  theme: string;
   focusMode: boolean;
 }
 
@@ -64,6 +65,6 @@ export function applySettings(settings: DisplaySettings): void {
   // Keep the source pane a little tighter than the printed pane; monospace reads large.
   root.style.setProperty("--editor-size", `${Math.max(11, settings.fontSize - 3)}px`);
 
-  root.dataset.theme = settings.theme;
+  // Colours are painted by themes.ts; this only handles typography and layout.
   document.body.classList.toggle("focus-mode", settings.focusMode);
 }

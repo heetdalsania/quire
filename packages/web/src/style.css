@@ -11,19 +11,15 @@
  */
 
 :root {
-  /* Rosé Pine Dawn */
-  --base: #faf4ed;
-  --surface: #fffaf3;
-  --overlay: #f2e9e1;
-  --muted: #9893a5;
-  --subtle: #797593;
-  --text: #464261;
-  --love: #b4637a;
-  --gold: #ea9d34;
-  --rose: #d7827e;
-  --pine: #286983;
-  --foam: #56949f;
-  --iris: #907aa9;
+  /*
+   * Pre-hydration defaults only. themes.ts overwrites these twelve roles the moment the
+   * app boots, and every other token below is derived from them with color-mix -- which is
+   * why a new colourway needs no CSS at all.
+   */
+  --base: #faf4ed; --surface: #fffaf3; --overlay: #f2e9e1;
+  --muted: #9893a5; --subtle: #797593; --text: #464261;
+  --love: #b4637a; --gold: #ea9d34; --rose: #d7827e;
+  --pine: #286983; --foam: #56949f; --iris: #907aa9;
 
   --accent: var(--iris);
   --agent: var(--gold);
@@ -35,17 +31,12 @@
   --shadow-sm: 0 1px 2px color-mix(in srgb, var(--text) 7%, transparent);
   --shadow-md: 0 1px 2px color-mix(in srgb, var(--text) 6%, transparent),
                0 6px 16px -6px color-mix(in srgb, var(--text) 14%, transparent);
+  --accent-text: var(--iris);
+  --agent-text: var(--gold);
 
   --font-ui: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Charter, "Source Serif 4", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-
-  --sidebar-w: 258px;
-  --rail-w: 312px;
-  --rz-w: 5px;
-  --sidebar-rz: var(--rz-w);
-  --rail-rz: var(--rz-w);
-  --editor-w: 1fr;
 
   --r-sm: 6px;
   --r-md: 9px;
@@ -53,33 +44,13 @@
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-:root[data-theme="dark"] {
-  --base: #232136; --surface: #2a273f; --overlay: #393552;
-  --muted: #6e6a86; --subtle: #908caa; --text: #e0def4;
-  --love: #eb6f92; --gold: #f6c177; --rose: #ea9a97;
-  --pine: #3e8fb0; --foam: #9ccfd8; --iris: #c4a7e7;
-  --rule: color-mix(in srgb, var(--text) 14%, transparent);
-  --rule-soft: color-mix(in srgb, var(--text) 8%, transparent);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
-  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 20px -8px rgb(0 0 0 / 0.5);
-}
-
+/* Before the app has painted, follow the system so there is no light flash in the dark. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    /* Rosé Pine Moon */
-    --base: #232136;
-    --surface: #2a273f;
-    --overlay: #393552;
-    --muted: #6e6a86;
-    --subtle: #908caa;
-    --text: #e0def4;
-    --love: #eb6f92;
-    --gold: #f6c177;
-    --rose: #ea9a97;
-    --pine: #3e8fb0;
-    --foam: #9ccfd8;
-    --iris: #c4a7e7;
-
+  :root:not([data-theme-id]) {
+    --base: #232136; --surface: #2a273f; --overlay: #393552;
+    --muted: #6e6a86; --subtle: #908caa; --text: #e0def4;
+    --love: #eb6f92; --gold: #f6c177; --rose: #ea9a97;
+    --pine: #3e8fb0; --foam: #9ccfd8; --iris: #c4a7e7;
     --rule: color-mix(in srgb, var(--text) 14%, transparent);
     --rule-soft: color-mix(in srgb, var(--text) 8%, transparent);
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
@@ -355,7 +326,7 @@ main { grid-column: 3; display: flex; flex-direction: column; min-width: 0; min-
 #preview img { max-width: 100%; border-radius: var(--r-md); }
 
 .wikilink {
-  color: var(--iris); text-decoration: none;
+  color: var(--accent-text, var(--iris)); text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--iris) 35%, transparent);
 }
 .wikilink:hover { border-bottom-color: var(--iris); }
@@ -576,7 +547,7 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
   margin: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.012em;
   flex: 1; min-width: 0; overflow-wrap: anywhere;
 }
-.gallery-card .stars { font-size: 11.5px; color: var(--gold); font-weight: 620; white-space: nowrap; }
+.gallery-card .stars { font-size: 11.5px; color: var(--agent-text, var(--gold)); font-weight: 620; white-space: nowrap; }
 .gallery-card .byline {
   margin: 0 0 9px; font-family: var(--font-mono); font-size: 11px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -919,3 +890,36 @@ body.replaying #editor .cm-content { opacity: 0.35; }
    you try rather than after the server refuses. */
 body.commenting #editor .cm-content { caret-color: transparent; }
 body.commenting #editor { opacity: 0.92; }
+
+/* ── theme picker ────────────────────────────────────────────────────── */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  max-height: 236px;
+  overflow-y: auto;
+  margin: -2px -4px 2px -2px;
+  padding: 2px 4px 2px 2px;
+}
+.theme-swatch {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 7px 8px;
+  border: 1px solid var(--rule); border-radius: var(--r-md);
+  background: var(--base); color: var(--subtle);
+  text-align: left;
+  transition: border-color 0.15s var(--ease), color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.theme-swatch:hover { transform: translateY(-1px); color: var(--text); }
+.theme-swatch[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  color: var(--text);
+}
+/* The swatch is painted in the theme's own colours, so the choice is made by eye. */
+.theme-swatch .chips { display: flex; height: 15px; border-radius: 4px; overflow: hidden; }
+.theme-swatch .chips i { flex: 1; display: block; }
+.theme-swatch .label {
+  font-size: 11.5px; font-weight: 550; letter-spacing: -0.005em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

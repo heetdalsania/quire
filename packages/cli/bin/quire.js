@@ -51,8 +51,11 @@ const flag = (name, fallback) => {
 
 const positional = args.filter((a, i) => !a.startsWith("--") && !String(args[i - 1] ?? "").startsWith("--"));
 const root = resolve(positional[0] ?? process.cwd());
-const webRoot = locate("../web", "../../web/dist");
-const registryPath = locate("../registry/index.json", "../../../registry/index.json");
+// The repository build comes first. Both layouts can exist at once -- `build:release`
+// stages a copy beside the binary -- and in a clone the live build is the one that
+// changes, so preferring the staged copy would serve a stale client after every release.
+const webRoot = locate("../../web/dist", "../web");
+const registryPath = locate("../../../registry/index.json", "../registry/index.json");
 
 if (!webRoot) {
   console.error("Web client not found. From a clone, run: npm run build");
