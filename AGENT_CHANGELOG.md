@@ -36,6 +36,14 @@ the production build, release bundle, and publishability checks. The exact
 `quiredocs-0.1.0-beta.1.tgz` was installed into an empty project; `quire --version`
 returned `0.1.0-beta.1`, the server started, and `/api/files` listed the smoke document.
 
+**Publish attempt:** npm correctly refused publication because the account requires 2FA. No
+package version was created. npm 11 also warned that leading `./` segments in the two `bin`
+targets would be normalized; the targets were changed to npm's canonical `dist/...` form and
+the release checker now asserts both mappings. The corrected candidate must pass the gate
+before the unpublished tag is moved. It passed `npm run verify` and an npm dry run with no
+metadata warnings; a clean tarball install created both `quire` and `quire-mcp` command
+shims, and both binaries started successfully.
+
 **Remaining:** npm and GitHub CLI sessions require owner re-authentication before external
 publication and push.
 

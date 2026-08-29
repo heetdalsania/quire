@@ -37,6 +37,7 @@ for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
 
 const pkg = JSON.parse(await readFile(join(cli, "package.json"), "utf8"));
 const expectedLicense = "AGPL-3.0-or-later";
+const expectedBins = { quire: "dist/quire.js", "quire-mcp": "dist/quire-mcp.js" };
 
 // The bundles must actually start. Nothing else here proves that.
 for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
@@ -54,6 +55,11 @@ if (pkg.private) problems.push("package is marked private");
 if (!pkg.version || pkg.version === "0.0.0") problems.push("version is unset");
 if (pkg.license !== expectedLicense) {
   problems.push(`package license is ${pkg.license ?? "unset"}, expected ${expectedLicense}`);
+}
+for (const [name, target] of Object.entries(expectedBins)) {
+  if (pkg.bin?.[name] !== target) {
+    problems.push(`package bin.${name} is ${pkg.bin?.[name] ?? "unset"}, expected ${target}`);
+  }
 }
 for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
   if (!(await exists(entry))) continue;

@@ -4,8 +4,8 @@
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "bin": {
-    "quire": "./dist/quire.js",
-    "quire-mcp": "./dist/quire-mcp.js"
+    "quire": "dist/quire.js",
+    "quire-mcp": "dist/quire-mcp.js"
   },
   "description": "Google Docs for Markdown - real-time collaborative editing over plain .md files, with AI agents as live collaborators.",
   "files": [

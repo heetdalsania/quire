@@ -11,7 +11,7 @@ files behind your back.
   during room teardown, eliminating platform-specific hangs without changing production
   watcher behavior.
 - Added `quire --version` and expanded the publishability check to verify executable bits,
-  version output, licence metadata, bundle startup, shebangs, and dependency closure.
+  version output, licence and binary metadata, bundle startup, shebangs, and dependency closure.
 - Split the editor, collaboration runtime, and Markdown parser into stable browser chunks;
   Mermaid remains lazy-loaded only when a document contains a diagram.
 - Reconciled security, licensing, package, release, and launch documentation with the code
