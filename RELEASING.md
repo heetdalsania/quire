@@ -6,7 +6,7 @@ no paid service.
 ## The release bundle
 
 Quire develops as a workspace but ships as a single package, because the onboarding promise
-is `npx quire <folder>` and that has to work with one install.
+is `npx quiredocs <folder>` and that has to work with one install.
 
 ```bash
 npm run build:release   # tsc + vite + esbuild, then stage packages/cli
@@ -28,7 +28,7 @@ The test suite does not prove the *package* works. This does:
 ```bash
 cd packages/cli && npm pack
 mkdir -p /tmp/smoke/vault && cd /tmp/smoke && npm init -y
-npm install /path/to/quire-0.1.0.tgz
+npm install /path/to/quiredocs-0.1.0.tgz
 printf '# Hi\n\nhello\n' > vault/hi.md
 ./node_modules/.bin/quire vault --port 4321 --no-git
 ```
@@ -50,7 +50,8 @@ These are the only steps that cannot be automated here, because they require cre
 that belong to a person:
 
 1. **npm** — create the account, then `npm login`, then `npm publish --access public` from
-   `packages/cli`. The name `quire` was free at the time of writing; confirm before
+   `packages/cli`. The name `quire` is taken on npm by an unrelated 2015 package, so the package is published as
+   `quiredocs`. The binaries are still `quire` and `quire-mcp`. Confirm the name before
    publishing, and if it has gone, change `name` in `packages/cli/package.json` and the
    references in README.md.
 2. **GitHub** — create the `quiredocs` organisation and the `quire` repository, then

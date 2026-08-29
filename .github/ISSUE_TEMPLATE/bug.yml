@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Quire version
-      placeholder: "quire --help prints nothing useful yet; `npm ls quire` or the tag you cloned"
+      placeholder: "quire --help prints nothing useful yet; `npm ls quiredocs` or the tag you cloned"
     validations: { required: true }
   - type: dropdown
     id: how

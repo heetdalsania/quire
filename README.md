@@ -13,7 +13,7 @@ proposes a change that never touches the file until it is accepted, and then aut
 revealed. Nobody reloads, and nothing conflicts.*
 
 ```bash
-npx quire ~/my-notes
+npx quiredocs ~/my-notes
 ```
 
 Or from a clone:
@@ -75,7 +75,7 @@ diff you read afterwards.
 Run the vault, then point any MCP client at it:
 
 ```bash
-npx -p quire quire-mcp --url http://127.0.0.1:4321 --name Claude
+npx -p quiredocs quire-mcp --url http://127.0.0.1:4321 --name Claude
 ```
 
 Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `append_document`,
@@ -104,8 +104,8 @@ before widening that.
 ## Connecting an agent
 
 ```bash
-npx quire ~/my-notes            # in one terminal
-npx -p quire quire-mcp --url http://127.0.0.1:4321
+npx quiredocs ~/my-notes            # in one terminal
+npx -p quiredocs quire-mcp --url http://127.0.0.1:4321
 ```
 
 Point any MCP client at `quire-mcp`. The agent joins each document's live session as a

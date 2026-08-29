@@ -46,7 +46,7 @@ public" a feature nobody has seen work, or posting to five places on five differ
 
 | Channel | Why it matters | Cost |
 |---|---|---|
-| **`npx quire`** | The lowest-friction install that exists. No install at all. | Free (npm) |
+| **`npx quiredocs`** | The lowest-friction install that exists. No install at all. | Free (npm) |
 | **Show HN** | Where both CollabMD and Perchpad surfaced. Highest-leverage single post. | Free |
 | **r/selfhosted** | This category's home. They care about Docker, no phone-home, no account. Quire is unusually well-suited. | Free |
 | **Docker / GHCR** | [Docker is used by 92% of IT professionals](https://www.docker.com), up from 80% in 2024. The self-hoster's default. | Free |
@@ -59,7 +59,7 @@ public" a feature nobody has seen work, or posting to five places on five differ
 ## 3. Hosting architectures, with real numbers
 
 ### Tier 0 — What exists today: no hosting at all
-Users run `npx quire`. Your cost is **zero**. Distribution is npm and GitHub, both free.
+Users run `npx quiredocs`. Your cost is **zero**. Distribution is npm and GitHub, both free.
 This tier can carry you to thousands of users.
 
 ### Tier 1 — A public demo instance (do this at launch)
@@ -131,14 +131,14 @@ only when more than a handful of people ask you to run it for them.
 ## 5. The sequence I would actually run
 
 1. **Now — nothing to deploy.** Polish, dogfood, record the demo. Cost: $0.
-2. **Launch week — npm + GHCR + a demo instance.** `npx quire`, a Docker image, one $8/month
+2. **Launch week — npm + GHCR + a demo instance.** `npx quiredocs`, a Docker image, one $8/month
    box behind a domain. Show HN, r/selfhosted, r/ObsidianMD.
 3. **Weeks 2–8 — Homebrew formula, awesome-list PRs, MCP directories.** Free, compounding.
 4. **Month 3 — decide.** If more than ~10 people have asked you to host it, build Tier 2.
    If not, stay a great open source tool and spend the time on the product.
 
 **What would change my mind:** if a team says "we'd pay today but cannot self-host", build
-hosting immediately — that is a customer, not a hypothesis. And if `npx quire` retention is
+hosting immediately — that is a customer, not a hypothesis. And if `npx quiredocs` retention is
 poor, no amount of deployment work fixes it; the problem is upstream in the product.
 
 ---

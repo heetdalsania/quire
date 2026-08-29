@@ -19,7 +19,7 @@ AI agents are collaborators you can watch, not processes that rewrite your files
 your back.
 
 ```bash
-npx quire ~/notes          # or, from a clone: node packages/cli/bin/quire.js ~/notes
+npx quiredocs ~/notes          # or, from a clone: node packages/cli/bin/quire.js ~/notes
 ```
 
 **The positioning, which matters and is verifiable:** plenty of tools do two of these.

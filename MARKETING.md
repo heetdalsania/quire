@@ -162,7 +162,7 @@ Vanity numbers to ignore: total stars, page views, upvotes.
 |---|---|---|
 | **% of sessions with an agent participant** | Whether the wedge is real or just a demo | **> 25%** |
 | Week-4 retention of design partners | Whether it survives contact with real work | ≥ 4 of 10 |
-| Returning `npx quire` runs | Habit, not curiosity | 30% run it twice |
+| Returning `npx quiredocs` runs | Habit, not curiosity | 30% run it twice |
 | Issues opened by non-you | Real usage, not drive-by stars | > 15 |
 | Outside PRs merged | Project has a future beyond you | ≥ 3 |
 | Star *trajectory* after week 2 | Whether launch spike converted | still climbing |

@@ -42,7 +42,7 @@ jobs:
           cd packages/cli && npm pack --silent
           mkdir -p /tmp/smoke/vault && cd /tmp/smoke
           npm init -y >/dev/null
-          npm install "$GITHUB_WORKSPACE"/packages/cli/quire-*.tgz --silent
+          npm install "$GITHUB_WORKSPACE"/packages/cli/quiredocs-*.tgz --silent
           printf '# Smoke\n\nhello\n' > vault/smoke.md
           ./node_modules/.bin/quire vault --port 4321 --no-git &
           sleep 5
