@@ -1,8 +1,11 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
 
-const REPO = "/Users/heet007/Documents/Career/Projects/Quire";
+// Resolve the repository from this file's own location so the recorder works from any
+// clone, which it must: it is documented as the way to regenerate docs/demo.gif.
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const { AgentSession } = await import(`${REPO}/packages/mcp/dist/src/index.js`);
 const { insertAttributed, proposeDelete } = await import(`${REPO}/packages/bridge/dist/src/index.js`);
 
