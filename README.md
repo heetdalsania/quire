@@ -115,6 +115,7 @@ peer, and is leashed by the document's own policy.
 
 | File | What's in it |
 |---|---|
+| **[CLAUDE.md](./CLAUDE.md)** | Orientation for an AI agent working on Quire — architecture, invariants, every bug found and why |
 | **[PLAN.md](./PLAN.md)** | Execution plan, locked decisions, phases, outcomes, risks |
 | [DESIGN.md](./DESIGN.md) | Competitive landscape, architecture, the hard problems |
 | [BUSINESS.md](./BUSINESS.md) | Cost math, deployment, funding paths |
