@@ -20,9 +20,9 @@
     "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.3.0",
     "esbuild": "^0.28.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }
