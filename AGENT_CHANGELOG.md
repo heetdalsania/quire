@@ -17,6 +17,22 @@ actually verified, and what the next agent must not assume.
 
 ---
 
+## 2026-08-29 - Stabilize filesystem recovery test
+
+**Agent:** OpenAI Codex
+
+**Objective:** Resolve the sole failure in the final beta CI matrix without weakening the
+filesystem recovery coverage.
+
+**Evidence and decision:** macOS on Node 22 failed while waiting a fixed 300 ms for chokidar
+to report a deleted file; the other five release jobs passed. The recovery test now polls for
+the observable deletion and restoration conditions with the existing five-second bound. This
+changes test synchronization only; production watcher behavior is unchanged.
+
+**Verification:** The targeted bridge suite passed all 13 tests. `npm run verify` also passed:
+type checking, all 176 tests, the production web build, both bundled CLIs, and release
+publishability checks. The six-job GitHub CI matrix remains pending at this commit.
+
 ## 2026-08-28 - Prepare v0.1.0-beta.1
 
 **Agent:** OpenAI Codex

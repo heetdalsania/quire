@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Vault } from "../src/index.js";
+import { waitFor } from "./helpers.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,14 +85,16 @@ describe("filesystem trouble", () => {
     const handle = vault.getDoc("flap.md");
 
     await rm(join(dir, "flap.md"));
-    await sleep(300);
-    expect(handle.deleted).toBe(true);
+    await waitFor(() => handle.deleted, "deleted file marked as deleted");
 
     await writeFile(join(dir, "flap.md"), "v2 reborn\n", "utf8");
-    await sleep(500);
+    await waitFor(
+      () => !handle.deleted && handle.getContent().includes("reborn"),
+      "recreated file restored",
+    );
 
-    expect(vault.getDoc("flap.md").deleted).toBe(false);
-    expect(vault.getDoc("flap.md").getContent()).toContain("reborn");
+    expect(handle.deleted).toBe(false);
+    expect(handle.getContent()).toContain("reborn");
   });
 
   it("ignores a directory that happens to end in .md", async () => {
