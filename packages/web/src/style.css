@@ -42,6 +42,19 @@
   --r-md: 9px;
   --r-lg: 13px;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /*
+   * Layout. These live on :root because layout.ts writes them here at runtime; declaring
+   * the defaults on `body` instead would shadow the values it sets. If any of them goes
+   * undefined the whole grid-template-columns declaration becomes invalid and the grid
+   * silently falls back to auto-placement -- which looks survivable in the vault and
+   * collapses completely in Discover.
+   */
+  --sidebar-w: 258px;
+  --rail-w: 312px;
+  --rz-w: 5px;
+  --sidebar-rz: var(--rz-w);
+  --rail-rz: var(--rz-w);
 }
 
 /* Before the app has painted, follow the system so there is no light flash in the dark. */
@@ -422,7 +435,7 @@ main { grid-column: 3; display: flex; flex-direction: column; min-width: 0; min-
 }
 .card .actions button.primary:hover { filter: brightness(1.1); color: var(--surface); }
 
-.card.composer { border-left-color: var(--who); }
+.card.composer { border-left-color: var(--who, var(--accent)); }
 .card.composer textarea {
   width: 100%;
   border: 1px solid var(--rule);
@@ -460,8 +473,8 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 /* ── inline marks (authorship + suggestions) ─────────────────────────── */
 
 .q-attributed {
-  background: color-mix(in srgb, var(--q-author) 22%, transparent);
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--q-author) 65%, transparent);
+  background: color-mix(in srgb, var(--q-author, var(--accent)) 22%, transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--q-author, var(--accent)) 65%, transparent);
   border-radius: 2px;
 }
 .q-suggest-insert {

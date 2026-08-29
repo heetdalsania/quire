@@ -101,7 +101,7 @@ export function renderGallery(
       const foot = document.createElement("footer");
       const licence = document.createElement("span");
       licence.className = "licence";
-      licence.textContent = entry.license;
+      licence.textContent = entry.license === "Unspecified" ? "No licence stated" : entry.license;
 
       const repoLink = document.createElement("a");
       repoLink.className = "icon-link";
@@ -126,8 +126,8 @@ export function renderGallery(
       install.title = already ? `${entry.installAs} is already here` : `Save as ${entry.installAs}`;
       install.onclick = () => handlers.onInstall(entry);
 
-      foot.append(licence, repoLink, preview, install);
-      card.append(head, by, desc, more, foot);
+      foot.append(repoLink, preview, install);
+      card.append(head, by, desc, more, licence, foot);
       return card;
     }),
   );
