@@ -44,6 +44,10 @@ before the unpublished tag is moved. It passed `npm run verify` and an npm dry r
 metadata warnings; a clean tarball install created both `quire` and `quire-mcp` command
 shims, and both binaries started successfully.
 
+**CI follow-up:** The corrected commit passed all six GitHub jobs. GitHub warned that
+`actions/checkout@v4` and `actions/setup-node@v4` target deprecated Node 20, so the workflow
+was moved to the current official v7 majors before the beta tag was moved.
+
 **Remaining:** npm and GitHub CLI sessions require owner re-authentication before external
 publication and push.
 

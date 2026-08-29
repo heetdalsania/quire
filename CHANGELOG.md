@@ -18,6 +18,7 @@ files behind your back.
   that is actually shipped.
 - Added `AGENT_CHANGELOG.md` as the append-only cross-agent handoff record.
 - Added grouped monthly Dependabot updates for npm dependencies and GitHub Actions.
+- Updated GitHub's checkout and Node setup actions to their Node 24-based major releases.
 
 ### Editing
 - Real-time co-editing over plain `.md` files, with the filesystem as the source of truth.
