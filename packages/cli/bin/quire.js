@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { QuireServer } from "@quire/server";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(resolve(here, "../package.json"), "utf8"));
 
 /**
  * Find an asset in both layouts.
@@ -16,10 +17,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 const locate = (...candidates) => candidates.map((c) => resolve(here, c)).find(existsSync) ?? null;
 const args = process.argv.slice(2);
 
+if (args.includes("--version") || args.includes("-v")) {
+  console.log(version);
+  process.exit(0);
+}
+
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`
   quire <directory>       Make a folder of Markdown files collaborative.
 
+    -v, --version         Print the installed Quire version
     --port <n>            Port to listen on (default 4321)
     --host <addr>         Bind address (default 127.0.0.1, local only)
     --allow-host <name>   Additionally trust this hostname (repeatable). Needed only

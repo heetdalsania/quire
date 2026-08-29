@@ -10,6 +10,7 @@ features (WYSIWYG, whiteboards, plugin APIs) are explicitly out of scope rather 
 npm install
 npm test          # full suite
 npm run typecheck
+npm run verify    # typecheck, tests, release build, and publishability checks
 ```
 
 ## Architecture invariants
@@ -23,6 +24,14 @@ These are load-bearing. A change that violates one is a bug even if the tests pa
    with `DISK_ORIGIN` must never trigger a disk write.
 4. **Git is the archive, never the transport.**
 
+## Agent handoffs
+
+Coding agents must read [CLAUDE.md](./CLAUDE.md) and [AGENT_CHANGELOG.md](./AGENT_CHANGELOG.md)
+before changing the repository. Append a dated entry to the agent changelog when work changes
+behavior, release state, architecture, or an important decision. Record commands actually run;
+do not describe an unrun check as passing.
+
 ## Licence
 
-The server is AGPL-3.0-or-later. By contributing you agree your contribution is licensed under it.
+The entire repository is AGPL-3.0-or-later. By contributing you agree your contribution is
+licensed under it.

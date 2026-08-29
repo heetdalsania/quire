@@ -68,10 +68,10 @@ Do not relitigate these. Each was researched and chosen deliberately.
 | CRDT | **Yjs** | Most mature (22.7k★), largest ecosystem, every binding exists. Do not write a CRDT. Do not use Loro (faster, but you'd write custom integrations you don't need). |
 | Editor | **CodeMirror 6** + `y-codemirror.next` | Source mode dodges the tree↔markdown round-trip problem entirely. |
 | WYSIWYG | **Deferred, possibly forever** | ProseMirror/Tiptap model docs as trees; round-tripping to markdown creates diff churn that destroys the "your files stay yours" premise. |
-| Server | **Hocuspocus v4** | Auth/persistence/scaling hooks; runs on Node, Bun, Deno, Cloudflare Workers. |
+| Server | **Custom `y-protocols` rooms** | The Vault owns each `Y.Doc`; a small protocol server avoids a second document tree and preserves that ownership boundary. |
 | Source of truth | **The Y.Doc is live truth; the file is a continuously-maintained projection** | Every design argument bottoms out here. |
 | Git's role | **Archive, never transport** | Git merge is line-based, CRDT convergence is not. Reconciling them in the hot path is how these projects die. |
-| License | **AGPL-3.0 server + MIT client SDK/MCP adapter** | What Docmost, HedgeDoc, SiYuan, Logseq all chose. Preserves the option to sell hosting; sharper contrast against Outline's BUSL. |
+| License | **AGPL-3.0-or-later for the repository and bundled distribution** | The current release is one package. A permissive SDK requires a future package split and clean dependency boundary before it can be claimed honestly. |
 | Agent protocol | **MCP** | Where agent tooling has converged. |
 | Hosting | **Hetzner + Coolify to start**, Cloudflare Workers + Durable Objects if scale demands | ~$7/mo, no billing surprises. DO is the right shape long-term (one doc = one stateful object). |
 
@@ -176,10 +176,10 @@ we think, and that is genuinely useful information rather than a failure.
 
 ### Phase 2 — v0.1 MVP ✅ **DONE**
 
-`npx quire ~/docs` opens a browser and the folder is multiplayer.
+`npx quiredocs ~/docs` opens a browser and the folder is multiplayer.
 
 - [ ] CLI: watch a directory, start server, print local URL, optional tunnel
-- [ ] Hocuspocus server wired to the Phase 1 bridge
+- [x] Custom `y-protocols` server wired directly to the Phase 1 bridge
 - [ ] Web app: file tree, CodeMirror 6 source mode, live preview, scroll sync
 - [ ] Presence: avatars, live cursors, selections
 - [ ] Share-by-link with a role (view / comment / edit)
@@ -206,20 +206,20 @@ criterion, not a build criterion — it is satisfied by the dogfooding window, n
 
 ---
 
-### Phase 4 — v0.3 THE WEDGE ✅ **BUILT** ★ *(demo clip still to record)*
+### Phase 4 — v0.3 THE WEDGE ✅ **BUILT** ★
 
 Everything before this is table stakes that CollabMD already has. This is the differentiator.
 
-- [ ] **MCP server** — an agent connects, authenticates, and receives a document handle
-- [ ] **Agent presence** — agents get an identity and a live cursor, visually distinct from humans
-- [ ] **Edit attribution** — authorship carried on every insert; a toggle tints spans by author
-- [ ] **Per-agent scoped undo** — reverting an agent's work leaves your adjacent edits intact
+- [x] **MCP server** — an agent connects and receives a document handle
+- [x] **Agent presence** — agents get an identity and a live cursor, visually distinct from humans
+- [x] **Edit attribution** — authorship carried on every insert; a toggle tints spans by author
+- [x] **Per-agent scoped undo** — reverting an agent's work leaves your adjacent edits intact
       (scoped Yjs `UndoManager` instances — design for this, don't bolt it on)
-- [ ] **Agent suggestion mode** — agent edits land as reviewable proposals; accept/reject individually
+- [x] **Agent suggestion mode** — agent edits land as reviewable proposals; accept/reject individually
       or per section
-- [ ] **Interrupt-and-steer** — type over an agent mid-generation with no conflict (this falls out of
+- [x] **Interrupt-and-steer** — type over an agent mid-generation with no conflict (this falls out of
       CRDTs for free and is the single most satisfying moment in the demo)
-- [ ] **Record the demo clip** — split screen, agent restructuring §2 while you type in §4, then the
+- [x] **Record the demo clip** — split screen, agent restructuring §2 while you type in §4, then the
       attribution toggle, then undoing only its paragraphs
 
 **Exit criteria:** the clip exists and is genuinely impressive without narration.
@@ -263,7 +263,7 @@ refusal to admit one.
 **During build:** sessions per phase vs. estimate (recalibrate, don't flagellate); bridge test pass rate;
 attribution size overhead; p95 keystroke→remote-render latency.
 
-**Post-launch:** GitHub stars *trajectory* (not count); `npx quire` runs; docs created per active user;
+**Post-launch:** GitHub stars *trajectory* (not count); `npx quiredocs` runs; docs created per active user;
 **percentage of sessions that include an agent participant** — this is the single number that says whether
 the wedge is real; design-partner retention at week 4.
 
@@ -466,7 +466,7 @@ search, link graph) · `web` (CodeMirror 6 client) · `cli` (`quire`) · `mcp` (
    project so far. Each server process seeds its `Y.Doc` from the file with a fresh clientID, so a
    browser still holding state from the previous process merged it back as genuinely concurrent
    content; Yjs cannot tell that identical characters are the same text, so it concatenated. Any
-   user who restarted `npx quire` with a tab open would have corrupted their files. Fixed with a
+   user who restarted `npx quiredocs` with a tab open would have corrupted their files. Fixed with a
    **document epoch**: the server announces its lineage before any sync traffic, and a client
    whose epoch no longer matches discards its local state instead of merging. Pinned as a
    regression test.

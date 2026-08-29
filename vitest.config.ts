@@ -1,5 +1,7 @@
 import { defineConfig } from "vitest/config";
 
+process.env.CHOKIDAR_USEPOLLING ??= "1";
+
 export default defineConfig({
   test: {
     include: ["packages/*/test/**/*.test.ts"],

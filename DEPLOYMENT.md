@@ -30,7 +30,7 @@ Not by being posted somewhere. The mechanism is narrower than it looks.
    that is watching an agent type while you type, and neither of you breaking. Fifteen
    seconds, no narration. This is why `docs/demo.gif` is the whole strategy.
 2. **Zero friction to reproduce it.** They have to get there themselves in under a minute or
-   the feeling evaporates. `npx quire ~/docs` is the entire onboarding — no account, no
+   the feeling evaporates. `npx quiredocs ~/docs` is the entire onboarding — no account, no
    import, no config file. The 2026 pattern is unambiguous: [tools that grew fastest did so
    by being dramatically easier to start than the alternative](https://sudoflare.com/open-source/top-10-open-source-tools-trending-2026/),
    and complex setup is no longer tolerated when `docker compose up` exists.
@@ -122,9 +122,9 @@ on-call burden that no cost table shows.
 | **Dual licence** | Many | Lightest for one person: same code, commercial licence for the copyleft-averse. |
 | **Bootstrapped tooling** | **Tiptap: ~$2.3M ARR, no VC** | The most relevant data point in this whole document. |
 
-**Recommended:** AGPL-3.0 server + permissive client SDK and MCP adapter, which is already
-what's in place. Add a commercial licence the first time an organisation asks. Add hosting
-only when more than a handful of people ask you to run it for them.
+**Current:** AGPL-3.0-or-later for the repository and bundled distribution. Consider a commercial
+licence the first time an organisation asks, and consider a permissive SDK only after separating
+one cleanly. Add hosting only when more than a handful of people ask you to run it for them.
 
 ---
 

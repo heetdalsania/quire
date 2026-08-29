@@ -230,7 +230,7 @@ export class Room {
     this.roles.clear();
     this.ownedClients.clear();
     this.awareness.destroy();
-    for (const socket of this.sockets) socket.close();
+    for (const socket of this.sockets) socket.terminate();
     this.sockets.clear();
   }
 }

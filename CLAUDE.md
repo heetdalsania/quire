@@ -3,9 +3,9 @@
 You are working on **Quire**. Read this before touching anything; it is the accumulated
 context of the whole build, including the mistakes, which are the expensive part.
 
-**Status:** v0.1.0, feature-complete, 176 tests green, release bundle verified by
-installing it. Not yet published to npm and not yet pushed to GitHub — those need the
-owner's accounts. See §10.
+**Status:** v0.1.0-beta.1 release candidate, feature-complete, 176 tests green, release
+bundle verified by installing it. The public GitHub repository is live; npm publication
+still needs the owner's account. See §10 and read `AGENT_CHANGELOG.md` for later work.
 
 **Owner:** Heet (ASU). Everything is built free and signup-free; if a task would need a
 paid service or an account, say so and stop rather than working around it.
@@ -233,6 +233,7 @@ curls the running container. All six green as of the first successful run.
 
 ## 9. Working practices the owner expects
 
+- **Read `AGENT_CHANGELOG.md` first** and append a truthful handoff entry after material work.
 - **Verify by running it**, not by reasoning about it. Most bugs above were invisible to
   builds and type checks.
 - **Report failures plainly**, including ones you caused. When a test timed out because my
@@ -251,15 +252,15 @@ CI green. Commit history uses a GitHub noreply address; no personal email is exp
 npm run build:release && npm run check:release   # both must pass before publishing
 ```
 
-Remaining owner-only steps, both documented in RELEASING.md:
-1. **npm** — `npm login`, then `npm publish --access public` from `packages/cli`. Confirm
-   the name `quire` is still free first.
-2. **GitHub** — create `heetdalsania/quire`, add the remote, push. CI verifies the release
-   bundle and the Docker image on that first push.
+Remaining owner-only steps, documented in RELEASING.md:
+1. **npm** — confirm `quiredocs` is available, then `npm login` and
+   `npm publish --access public` from `packages/cli`.
+2. **GitHub settings** — enable private vulnerability reporting and require CI before
+   merging to `main`.
 
 **Unbuilt ideas**, in IDEAS.md: `quire replay --gif` (14), agent scoreboard (15), vault as a
 public MCP resource (17, would need auth). Ideas 1–13 and 16 are built.
 
-**Other documents:** PLAN.md (execution, locked decisions, outcomes), DESIGN.md (landscape,
+**Other documents:** AGENT_CHANGELOG.md (cross-agent handoffs), PLAN.md (execution, locked decisions, outcomes), DESIGN.md (landscape,
 architecture), BUSINESS.md (costs, funding), MARKETING.md (positioning, launch),
 DEPLOYMENT.md (routes and costs), IDEAS.md, SECURITY.md, RELEASING.md, CHANGELOG.md.

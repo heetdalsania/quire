@@ -1,10 +1,23 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0-beta.1 - 2026-08-28
 
 First release. Point Quire at a folder of Markdown and it becomes a live multiplayer
 workspace where AI agents are collaborators you can watch, not processes that rewrite your
 files behind your back.
+
+### Release readiness
+- Added deterministic polling for watcher-based tests and immediate WebSocket termination
+  during room teardown, eliminating platform-specific hangs without changing production
+  watcher behavior.
+- Added `quire --version` and expanded the publishability check to verify executable bits,
+  version output, licence metadata, bundle startup, shebangs, and dependency closure.
+- Split the editor, collaboration runtime, and Markdown parser into stable browser chunks;
+  Mermaid remains lazy-loaded only when a document contains a diagram.
+- Reconciled security, licensing, package, release, and launch documentation with the code
+  that is actually shipped.
+- Added `AGENT_CHANGELOG.md` as the append-only cross-agent handoff record.
+- Added grouped monthly Dependabot updates for npm dependencies and GitHub Actions.
 
 ### Editing
 - Real-time co-editing over plain `.md` files, with the filesystem as the source of truth.

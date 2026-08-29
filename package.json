@@ -1,6 +1,7 @@
 {
   "name": "quire-monorepo",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -13,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --build --pretty",
+    "verify": "npm run typecheck && npm test && npm run build:release && npm run check:release",
     "start": "node packages/cli/bin/quire.js",
     "build:release": "npm run build && node scripts/build-release.mjs",
     "check:release": "node scripts/check-release.mjs"

@@ -66,10 +66,9 @@ deliberately want to share attribution history. `--no-persist` turns it off enti
   whenever the server is bound beyond loopback, never runs automatically, and is off
   unless asked for -- but an installed document you then choose to run is still code you
   are choosing to run.
-- **View links are enforced; comment links are advisory.** A view link's writes are dropped by the
-  server, so read-only genuinely is read-only. A comment link is currently enforced only in the
-  client, because distinguishing a comment write from a text write requires inspecting the CRDT
-  update. Treat a comment link as "edit, with a UI that discourages it".
+- **View and comment links are enforced server-side.** View links cannot write. Comment links may
+  update comment and awareness data but text edits are rejected by inspecting the CRDT update.
+  These are still capability links: possession of the URL grants its role.
 - **Share links are capabilities.** There are no accounts, so the link *is* the credential. Anyone
   holding it has the role baked into it. Links live in memory and die when the server stops.
 - **Suggestions are advisory.** Any connected client can accept one; there is no reviewer role.

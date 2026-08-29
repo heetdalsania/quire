@@ -128,7 +128,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     return ((await res.json()) as { files: string[] }).files;
   };
 
-  const server = new McpServer({ name: "quire", version: "0.1.0" });
+  const server = new McpServer({ name: "quire", version: "0.1.0-beta.1" });
 
   server.registerTool(
     "list_documents",

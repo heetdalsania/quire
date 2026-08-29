@@ -12,13 +12,13 @@ body:
     id: version
     attributes:
       label: Quire version
-      placeholder: "quire --help prints nothing useful yet; `npm ls quiredocs` or the tag you cloned"
+      placeholder: "Output of `quire --version`, or the commit SHA if running from a clone"
     validations: { required: true }
   - type: dropdown
     id: how
     attributes:
       label: How are you running it
-      options: [npx quire, cloned repository, Docker, other]
+      options: [npx quiredocs, cloned repository, Docker, other]
     validations: { required: true }
   - type: textarea
     id: flags

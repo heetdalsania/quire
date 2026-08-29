@@ -101,21 +101,12 @@ The container binds to `127.0.0.1` deliberately. Quire has no authentication, so
 can reach the port can read and edit every document — read [SECURITY.md](./SECURITY.md)
 before widening that.
 
-## Connecting an agent
-
-```bash
-npx quiredocs ~/my-notes            # in one terminal
-npx -p quiredocs quire-mcp --url http://127.0.0.1:4321
-```
-
-Point any MCP client at `quire-mcp`. The agent joins each document's live session as a
-peer, and is leashed by the document's own policy.
-
 ## Documents
 
 | File | What's in it |
 |---|---|
 | **[CLAUDE.md](./CLAUDE.md)** | Orientation for an AI agent working on Quire — architecture, invariants, every bug found and why |
+| **[AGENT_CHANGELOG.md](./AGENT_CHANGELOG.md)** | Append-only handoff ledger for every coding agent: decisions, files, verification, and remaining work |
 | **[PLAN.md](./PLAN.md)** | Execution plan, locked decisions, phases, outcomes, risks |
 | [DESIGN.md](./DESIGN.md) | Competitive landscape, architecture, the hard problems |
 | [BUSINESS.md](./BUSINESS.md) | Cost math, deployment, funding paths |
@@ -130,4 +121,5 @@ peer, and is leashed by the document's own policy.
 
 ## Licence
 
-AGPL-3.0-or-later for the server; the client SDK and MCP adapter are permissive.
+The entire repository and the bundled `quiredocs` distribution are licensed under
+AGPL-3.0-or-later. Quire does not currently publish a separate permissive SDK.

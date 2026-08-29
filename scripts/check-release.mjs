@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +36,7 @@ for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
 }
 
 const pkg = JSON.parse(await readFile(join(cli, "package.json"), "utf8"));
+const expectedLicense = "AGPL-3.0-or-later";
 
 // The bundles must actually start. Nothing else here proves that.
 for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
@@ -51,9 +52,33 @@ for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
 }
 if (pkg.private) problems.push("package is marked private");
 if (!pkg.version || pkg.version === "0.0.0") problems.push("version is unset");
+if (pkg.license !== expectedLicense) {
+  problems.push(`package license is ${pkg.license ?? "unset"}, expected ${expectedLicense}`);
+}
+for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
+  if (!(await exists(entry))) continue;
+  const mode = (await stat(join(cli, entry))).mode;
+  if ((mode & 0o111) === 0) problems.push(`${entry} is not executable`);
+}
 if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
   // Workspace ranges like "*" do not resolve for anyone outside this repository.
   problems.push(`unbundled dependencies would not resolve: ${Object.keys(pkg.dependencies).join(", ")}`);
+}
+
+if (await exists("dist/quire.js")) {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  try {
+    const { stdout } = await promisify(execFile)(process.execPath, [join(cli, "dist/quire.js"), "--version"], {
+      timeout: 20_000,
+    });
+    if (stdout.trim() !== pkg.version) {
+      problems.push(`quire --version returned ${JSON.stringify(stdout.trim())}, expected ${pkg.version}`);
+    }
+  } catch (error) {
+    const detail = String(error.stderr || error.message).split("\n")[0];
+    problems.push(`quire --version fails: ${detail}`);
+  }
 }
 
 if (problems.length > 0) {

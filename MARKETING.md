@@ -115,7 +115,8 @@ Expect these, and have answers ready:
 - *"CRDTs are overkill for Markdown."* → Show the interrupt moment. It's the whole point.
 - *"What stops the agent trashing my file?"* → Suggest mode. It never reaches disk unaccepted.
 - *"Is this secure to run?"* → Loopback-only, origin-checked, no telemetry. Point at the tests.
-- *"AGPL is a non-starter for us."* → Client SDK and MCP adapter are permissive; server is AGPL.
+- *"AGPL is a non-starter for us."* → The current distribution is AGPL. A commercial licence or
+  separately packaged permissive SDK can be considered when real demand justifies it.
 
 ### Day 0–1 — r/selfhosted
 Different audience, different post. They care about Docker, resource usage, no phone-home, and no

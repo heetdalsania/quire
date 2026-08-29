@@ -14,7 +14,7 @@ AI agents can join the session as real collaborators, with cursors you can watch
 ### Onboarding, in full
 
 ```bash
-npx quire ~/Documents/specs
+npx quiredocs ~/Documents/specs
 ```
 
 That's it. No account, no import, no signup wall. It prints a local URL and an optional share link.
@@ -119,7 +119,7 @@ you have thousands of users. Do not spend a single hour optimizing cost before t
 ## 3. Where it gets deployed
 
 ### How users run it
-- `npx quire ~/docs` — zero-install local, the primary path
+- `npx quiredocs ~/docs` — zero-install local, the primary path
 - Docker / `docker compose` image on GHCR — the self-hoster's default
 - Single binary via GitHub Releases; Homebrew formula
 - One-click templates for Railway, Coolify, and Cloudflare
@@ -155,10 +155,9 @@ Comparables, all verified:
 open source core, no venture capital, real revenue. It is proof that this category can pay a person's
 salary without an accelerator anywhere in the picture.
 
-**Recommended structure:** AGPL-3.0 server + MIT client SDK and MCP adapter. Later: hosted cloud at ~$5–8
-per seat, plus a commercial license for organizations that can't take copyleft. Dual licensing suits a solo
-maintainer better than open core, because there is no second proprietary feature set to build and maintain
-in parallel.
+**Current structure:** AGPL-3.0-or-later for the repository and bundled distribution. Later: hosted cloud
+at ~$5–8 per seat, plus a commercial licence for organizations that cannot take copyleft. A permissive SDK
+is possible only after separating it into an independent package with a clean dependency boundary.
 
 ---
 

@@ -11,14 +11,16 @@ is `npx quiredocs <folder>` and that has to work with one install.
 ```bash
 npm run build:release   # tsc + vite + esbuild, then stage packages/cli
 npm run check:release   # refuses to publish something that will not run
+npm run verify          # full pre-release gate: types, tests, build, release checks
 ```
 
 `build:release` bundles both binaries with their dependencies and copies the web client and
 registry index beside them. The published package therefore has **no runtime dependencies**
 — nothing to resolve on the user's machine.
 
-`check:release` is not a formality. It verifies the bundles exist, start, and carry exactly
-one shebang each, and that no unresolvable workspace ranges leaked into `dependencies`.
+`check:release` is not a formality. It verifies the bundles exist, start, are executable,
+report the package version, carry exactly one shebang each, declare the expected licence,
+and contain no unresolvable workspace ranges in `dependencies`.
 Both of those failures were real, and both only appear once the tarball is installed.
 
 ## Verifying it the way a user would
@@ -28,7 +30,7 @@ The test suite does not prove the *package* works. This does:
 ```bash
 cd packages/cli && npm pack
 mkdir -p /tmp/smoke/vault && cd /tmp/smoke && npm init -y
-npm install /path/to/quiredocs-0.1.0.tgz
+npm install /path/to/quiredocs-0.1.0-beta.1.tgz
 printf '# Hi\n\nhello\n' > vault/hi.md
 ./node_modules/.bin/quire vault --port 4321 --no-git
 ```
@@ -38,11 +40,16 @@ CI does this on every push, along with a Docker build and run.
 ## Publishing
 
 ```bash
-npm publish --access public        # from packages/cli
-git tag v0.1.0 && git push --tags
+npm publish --access public --tag beta   # from packages/cli
+git tag v0.1.0-beta.1
+git push origin main v0.1.0-beta.1
 ```
 
 `prepublishOnly` runs `check:release` first, so a stale bundle cannot be published.
+
+After the beta has been dogfooded, change the version to `0.1.0`, move this changelog
+entry to that version, rerun `npm run verify` and the packed-package smoke test, then
+publish without `--tag beta`. Do not move the npm `latest` tag to a prerelease version.
 
 ## What needs an account
 
@@ -50,15 +57,12 @@ These are the only steps that cannot be automated here, because they require cre
 that belong to a person:
 
 1. **npm** — create the account, then `npm login`, then `npm publish --access public` from
-   `packages/cli`. The name `quire` is taken on npm by an unrelated 2015 package, so the package is published as
-   `quiredocs`. The binaries are still `quire` and `quire-mcp`. Confirm the name before
-   publishing, and if it has gone, change `name` in `packages/cli/package.json` and the
-   references in README.md.
-2. **GitHub** — the repository lives at `heetdalsania/quire`. GitHub's REST API cannot
-   create organisations (it is a browser-only action), so if you want it under a `quiredocs`
-   org, create the org at <https://github.com/organizations/plan> and then transfer the
-   repository in Settings. Transfers keep stars, issues and forks, and GitHub redirects the
-   old URLs permanently — so nothing breaks by starting on a personal account.
+   `packages/cli`. The name `quire` is taken by an unrelated package, so this project uses
+   `quiredocs`; the installed binaries remain `quire` and `quire-mcp`. Confirm `quiredocs`
+   is still available immediately before the first publish.
+2. **GitHub settings** — the public repository already lives at `heetdalsania/quire`.
+   Enable private vulnerability reporting and require the CI workflow before merging to
+   `main`. These settings require an owner in the GitHub UI.
 
 Nothing else requires a signup. Docker Hub is not needed: the image builds from source, and
 GHCR publishing can be added later if you want a pre-built image.

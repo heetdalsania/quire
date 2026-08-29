@@ -88,7 +88,7 @@ happened. Quire makes agent editing *observable and interruptible* — which is 
 currently complain about. Nobody in Tier 1, 2, or 3 has built this.
 
 Secondary differentiators, in priority order:
-1. **Zero migration.** `npx quire ~/my-docs` and that folder is multiplayer. No import, no lock-in, no signup.
+1. **Zero migration.** `npx quiredocs ~/my-docs` and that folder is multiplayer. No import, no lock-in, no signup.
 2. **Suggestion mode for humans too**, landing as git commits or a PR. Google Docs suggest-mode is the most
    frequently missed feature in every OSS alternative, and it maps cleanly onto docs-as-code review.
 3. **Genuinely open source** (AGPL), against a category leader that is BUSL.
@@ -105,12 +105,12 @@ Secondary differentiators, in priority order:
 └───────────────┬────────────────────┘
                 │ WebSocket (Yjs sync protocol)
 ┌───────────────▼────────────────────┐
-│  Quire server (Hocuspocus v4)      │  auth, per-doc rooms, ACLs
-│  SQLite: doc state + snapshots     │  single-binary self-host
+│  Quire server (`y-protocols`)      │  origin checks, rooms, roles
+│  `.quire/state`: CRDT sidecars     │  durable collaboration metadata
 └───────────────┬────────────────────┘
                 │
 ┌───────────────▼────────────────────┐
-│  Quire agent (local Node process)  │
+│  Quire bridge (same Node process)  │
 │  chokidar watcher ←→ CRDT bridge   │  ◀── THE HARD PART
 │  git snapshotter (periodic commit) │
 └───────────────┬────────────────────┘
@@ -135,10 +135,9 @@ Secondary differentiators, in priority order:
 ## 5. The hard problems (honest assessment)
 
 ### Solved — weeks, not months
-Real-time text sync, presence, cursors, offline, and reconnection are **completely solved** by Yjs +
-Hocuspocus. This is mature, MIT-ish, and battle-tested at scale. Do not write a CRDT. Markdown rendering,
-wiki-links, backlinks, and Mermaid are equally solved by the unified/remark ecosystem. Auth, share links,
-and permissions are ordinary web work.
+Real-time text sync, presence, cursors, offline, and reconnection are built on Yjs and its standard
+`y-protocols` wire format. Quire owns a small room server because the Vault must own each `Y.Doc`.
+Do not write a CRDT. Markdown rendering uses Marked, with Mermaid loaded only for documents that need it.
 
 **If you only build these, you have a weekend demo — which is exactly what the 30 abandoned repos are.**
 
@@ -177,7 +176,7 @@ wedge; decide deliberately), a real per-folder permission model, SSO for self-ho
 
 ### Verdict
 
-**Feasible.** A focused solo MVP is realistic in ~6–10 weeks: CodeMirror source mode, Yjs over Hocuspocus,
+**Feasible.** A focused solo MVP is realistic in ~6–10 weeks: CodeMirror source mode, Yjs over WebSocket,
 the filesystem bridge, share-by-link, presence, anchored comments. The technical risk is genuinely low —
 every dependency is mature.
 
@@ -189,7 +188,7 @@ has been unreleased for years. Scope discipline is the actual success factor.
 
 ## 6. Roadmap
 
-**v0.1 — "it works" (~6–10 weeks).** `npx quire ~/docs`. File tree, CodeMirror source mode + live preview,
+**v0.1 — "it works" (~6–10 weeks).** `npx quiredocs ~/docs`. File tree, CodeMirror source mode + live preview,
 Yjs multiplayer with presence and cursors, the filesystem bridge, share-by-link, local-only by default.
 Ship the moment two browsers can edit one real file on disk and neither loses data.
 
@@ -214,16 +213,15 @@ Every one of these is how this project dies.
 |---|---|---|
 | Editor | CodeMirror 6 + `y-codemirror.next` | Source mode dodges the tree↔markdown round-trip problem |
 | CRDT | **Yjs** (22.7k★) | Most mature, largest ecosystem, every binding exists. Loro (6.1k★) is faster but you don't need it and would write custom integrations. Automerge is a worse fit for text. |
-| Server | Hocuspocus v4 | Auth/persistence/scaling hooks; runs on Node, Bun, Deno, and Cloudflare Workers |
-| Alt server | y-sweet | If you'd rather have S3/filesystem persistence than a DB |
-| Local agent | Node + chokidar + isomorphic-git | The filesystem bridge |
-| Markdown | unified/remark/rehype, Shiki, Mermaid | Standard, boring, correct |
-| Storage | SQLite + S3-compatible for attachments | Single-binary self-host is a real adoption advantage |
+| Server | Node + `ws` + `y-protocols` | Keeps the Vault's `Y.Doc` authoritative without a relay document |
+| Local bridge | Node + chokidar + git CLI | Filesystem projection and periodic snapshots |
+| Markdown | Marked + Mermaid | Small parser; diagrams are loaded on demand |
+| Storage | Plain Markdown + `.quire/state` sidecars | Documents stay portable while collaboration metadata survives restarts |
 | Agent protocol | MCP | Where agent tooling has converged |
 
-**License: AGPL-3.0** for the server, **MIT** for the client SDK and MCP adapter. AGPL is what Docmost,
-HedgeDoc, SiYuan, Logseq, and Trilium all chose — it preserves the option to sell hosting without a rug-pull,
-and it's a sharper contrast against Outline's BUSL. The permissive SDK keeps integrations frictionless.
+**License: AGPL-3.0-or-later** for the entire repository and current bundled distribution. A future
+permissive SDK would first need to become an independently distributed package with no AGPL code bundled
+into it.
 
 ---
 
