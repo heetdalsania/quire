@@ -54,9 +54,11 @@ that belong to a person:
    `quiredocs`. The binaries are still `quire` and `quire-mcp`. Confirm the name before
    publishing, and if it has gone, change `name` in `packages/cli/package.json` and the
    references in README.md.
-2. **GitHub** — create the `quiredocs` organisation and the `quire` repository, then
-   `git remote add origin …` and push. CI runs on first push and will verify the release
-   bundle and the Docker image, neither of which has been executed locally.
+2. **GitHub** — the repository lives at `heetdalsania/quire`. GitHub's REST API cannot
+   create organisations (it is a browser-only action), so if you want it under a `quiredocs`
+   org, create the org at <https://github.com/organizations/plan> and then transfer the
+   repository in Settings. Transfers keep stars, issues and forks, and GitHub redirects the
+   old URLs permanently — so nothing breaks by starting on a personal account.
 
 Nothing else requires a signup. Docker Hub is not needed: the image builds from source, and
 GHCR publishing can be added later if you want a pre-built image.

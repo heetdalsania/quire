@@ -251,7 +251,7 @@ npm run build:release && npm run check:release   # both must pass before publish
 Remaining owner-only steps, both documented in RELEASING.md:
 1. **npm** — `npm login`, then `npm publish --access public` from `packages/cli`. Confirm
    the name `quire` is still free first.
-2. **GitHub** — create `quiredocs/quire`, add the remote, push. CI verifies the release
+2. **GitHub** — create `heetdalsania/quire`, add the remote, push. CI verifies the release
    bundle and the Docker image on that first push.
 
 **Unbuilt ideas**, in IDEAS.md: `quire replay --gif` (14), agent scoreboard (15), vault as a

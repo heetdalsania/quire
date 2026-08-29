@@ -33,11 +33,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/quiredocs/quire.git"
+    "url": "git+https://github.com/heetdalsania/quire.git"
   },
-  "homepage": "https://github.com/quiredocs/quire",
+  "homepage": "https://github.com/heetdalsania/quire",
   "bugs": {
-    "url": "https://github.com/quiredocs/quire/issues"
+    "url": "https://github.com/heetdalsania/quire/issues"
   },
   "scripts": {
     "prepublishOnly": "node ../../scripts/check-release.mjs"
