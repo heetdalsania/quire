@@ -17,6 +17,30 @@ actually verified, and what the next agent must not assume.
 
 ---
 
+## 2026-08-29 - Final public-beta security and package audit
+
+**Agent:** OpenAI Codex
+
+**Objective:** Apply the owner's release threshold to the exact tagged npm candidate, fix
+every release-blocking finding, and publish only after independent package verification.
+
+**Finding and change:** The production dependency audit was clean, but the complete audit
+found a critical advisory in Vitest 2.1.9 and inherited Vite/esbuild advisories. Although
+these development tools are not shipped, Vitest was upgraded to 4.1.11. The lockfile now
+resolves the test runner through patched Vite 8 and esbuild 0.28 releases.
+
+**Verification:** `npm run verify` passed under Vitest 4.1.11: type checking, 176 tests,
+production web build, both CLI bundles, and release checks. Full and production-only
+`npm audit` runs each reported zero vulnerabilities. GitHub secret scanning reported zero
+open alerts, and local tracked-file plus packed-package credential signatures found none.
+The exact 1.55 MB tarball installed in an empty project, created both command shims, reported
+the beta version, started the server, indexed a document, persisted a browser edit to disk,
+updated the rendered preview, and lazily rendered a Mermaid diagram. Desktop/mobile checks
+had no viewport overflow, and the browser logged no warnings or errors.
+
+**Remaining:** Commit and multi-platform GitHub CI are pending. npm publication still requires
+the owner's 2FA challenge; the GitHub prerelease remains a draft until registry verification.
+
 ## 2026-08-29 - Stabilize filesystem recovery test
 
 **Agent:** OpenAI Codex

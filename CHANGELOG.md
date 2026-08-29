@@ -19,6 +19,8 @@ files behind your back.
 - Added `AGENT_CHANGELOG.md` as the append-only cross-agent handoff record.
 - Added grouped monthly Dependabot updates for npm dependencies and GitHub Actions.
 - Updated GitHub's checkout and Node setup actions to their Node 24-based major releases.
+- Upgraded the test runner to patched Vitest 4.1 releases; both the complete and
+  production-only npm dependency audits report zero known vulnerabilities.
 
 ### Editing
 - Real-time co-editing over plain `.md` files, with the filesystem as the source of truth.
