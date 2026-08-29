@@ -210,7 +210,11 @@ Also verified manually and not covered by tests: two real browsers editing live,
 packaged tarball installed into an empty project, a soak run (20 clients, 10 documents,
 2400 ops, all converged, heap flat at 13–19 MB).
 
-**Never covered by any test:** anything requiring a browser to render, and the Docker image.
+**Never covered by any test:** anything requiring a browser to render.
+
+CI runs on every push: tests on Ubuntu and macOS across Node 22 and 24, a release-bundle
+job that installs the packed tarball and runs it, and a Docker job that builds the image and
+curls the running container. All six green as of the first successful run.
 
 ---
 
@@ -223,8 +227,6 @@ packaged tarball installed into an empty project, a soak run (20 clients, 10 doc
 - **Documents load eagerly** — memory scales with vault size.
 - **`--history` costs 308×** the visible text in state after heavy editing.
 - **P2P** has manual signalling and no TURN; symmetric NAT fails.
-- **The Docker image and CI have never executed.** Written, never run — no Docker here and
-  no remote yet. They run on first push.
 - **`signAuthorSpans` exists in the bridge with no UI.**
 
 ---
@@ -242,7 +244,8 @@ packaged tarball installed into an empty project, a soak run (20 clients, 10 doc
 
 ## 10. Where things stand and what is next
 
-**Immediate next step: the GitHub repository.** Requires the owner's account.
+**Done:** the repository is live and public at <https://github.com/heetdalsania/quire>, with
+CI green. Commit history uses a GitHub noreply address; no personal email is exposed.
 
 ```bash
 npm run build:release && npm run check:release   # both must pass before publishing
