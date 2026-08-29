@@ -31,7 +31,8 @@ changes test synchronization only; production watcher behavior is unchanged.
 
 **Verification:** The targeted bridge suite passed all 13 tests. `npm run verify` also passed:
 type checking, all 176 tests, the production web build, both bundled CLIs, and release
-publishability checks. The six-job GitHub CI matrix remains pending at this commit.
+publishability checks. GitHub CI run `33272839451` passed all six jobs: the Node 22/24 test
+matrix on macOS/Ubuntu, the packed-release smoke test, and the Docker smoke test.
 
 ## 2026-08-28 - Prepare v0.1.0-beta.1
 
