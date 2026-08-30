@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a focused improvement to Quire.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is difficult today, and who encounters it?
+    validations: { required: true }
+  - type: textarea
+    id: experience
+    attributes:
+      label: Proposed experience
+      description: Describe the outcome and interaction, not only an implementation.
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or other approaches have you tried?
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I checked PLAN.md and this request is not explicitly out of scope.
+          required: true
+        - label: I searched existing issues and discussions for the same request.
+          required: true

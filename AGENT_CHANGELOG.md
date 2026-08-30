@@ -17,6 +17,32 @@ actually verified, and what the next agent must not assume.
 
 ---
 
+## 2026-08-30 - GitHub launch-readiness pass
+
+**Agent:** OpenAI Codex
+
+**Objective:** Re-audit the live public repository after the beta release and improve its
+first-visit clarity, discoverability, contributor path, and security-reporting setup.
+
+**Changed surfaces:** The README now shows live CI, npm beta, Node, and licence status; gives an
+explicit `quiredocs@beta` quick start; identifies the public-beta state; and links community entry
+points. Contributor guidance now includes setup, verification, scope, privacy, and pull-request
+expectations. Added a code of conduct, pull-request template, and structured feature-request form,
+and aligned the bug form with the beta install command.
+
+**Repository settings:** Added the npm package homepage and 15 relevant GitHub topics, enabled
+Discussions, and enabled private vulnerability reporting so the existing security contact link is
+usable. Branch protection remains unset; that is a maintainer workflow decision rather than a
+release blocker.
+
+**Verification:** `npm run verify` passed with type checking, all 176 tests across 14 files, the
+production web build, both release bundles, and publishability checks. `npm audit` and
+`npm audit --omit=dev` each reported zero vulnerabilities. All GitHub issue-template YAML parsed
+successfully, and `git diff --check` passed. The first restricted-runner attempt timed out while
+server setup tried to bind loopback; the isolated lifecycle suite then passed all five tests with
+normal local process permissions before the complete gate was rerun successfully with those same
+permissions.
+
 ## 2026-08-30 - Publish v0.1.0-beta.1
 
 **Agent:** OpenAI Codex

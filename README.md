@@ -1,5 +1,10 @@
 # Quire
 
+[![CI](https://github.com/heetdalsania/quire/actions/workflows/ci.yml/badge.svg)](https://github.com/heetdalsania/quire/actions/workflows/ci.yml)
+[![npm beta](https://img.shields.io/npm/v/quiredocs/beta?label=npm%20beta)](https://www.npmjs.com/package/quiredocs)
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](./LICENSE)
+
 **Google Docs for Markdown — where the files stay yours, and one of the collaborators is an agent.**
 
 Point Quire at a folder of Markdown. It becomes a live multiplayer workspace, and AI agents
@@ -12,9 +17,16 @@ revertable edits. Your documents stay plain `.md` files on disk, in your git rep
 proposes a change that never touches the file until it is accepted, and then authorship is
 revealed. Nobody reloads, and nothing conflicts.*
 
+**Public beta:** [`v0.1.0-beta.1`](https://github.com/heetdalsania/quire/releases/tag/v0.1.0-beta.1)
+is available now. Quire requires Node.js 22 or newer and runs locally with no account or telemetry.
+
+## Quick start
+
 ```bash
-npx quiredocs ~/my-notes
+npx quiredocs@beta ~/my-notes
 ```
+
+Open `http://127.0.0.1:4321` in a browser. Press `Ctrl+C` in the terminal when you are done.
 
 Or from a clone:
 
@@ -75,7 +87,7 @@ diff you read afterwards.
 Run the vault, then point any MCP client at it:
 
 ```bash
-npx -p quiredocs quire-mcp --url http://127.0.0.1:4321 --name Claude
+npx -p quiredocs@beta quire-mcp --url http://127.0.0.1:4321 --name Claude
 ```
 
 Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `append_document`,
@@ -100,6 +112,13 @@ docker compose up --build
 The container binds to `127.0.0.1` deliberately. Quire has no authentication, so anyone who
 can reach the port can read and edit every document — read [SECURITY.md](./SECURITY.md)
 before widening that.
+
+## Community
+
+Questions and ideas belong in [Discussions](https://github.com/heetdalsania/quire/discussions).
+Use the [issue tracker](https://github.com/heetdalsania/quire/issues) for reproducible bugs and
+planned features, and read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+If Quire solves a problem you care about, starring the repository helps other people find it.
 
 ## Documents
 

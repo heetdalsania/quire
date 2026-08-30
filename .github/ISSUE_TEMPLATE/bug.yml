@@ -18,7 +18,7 @@ body:
     id: how
     attributes:
       label: How are you running it
-      options: [npx quiredocs, cloned repository, Docker, other]
+      options: [npx quiredocs@beta, cloned repository, Docker, other]
     validations: { required: true }
   - type: textarea
     id: flags
