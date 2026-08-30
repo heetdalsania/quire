@@ -16,7 +16,7 @@ jobs:
       matrix:
         # The filesystem bridge is the riskiest part of Quire and watchers differ by
         # platform, so it is worth proving on more than one.
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: ["22", "24"]
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +27,21 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Test Chromium, Firefox, and WebKit
+        run: npm run test:e2e
 
   release-bundle:
     # Proves the published package actually starts, which the test suite does not.

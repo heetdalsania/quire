@@ -35,6 +35,14 @@ npm run verify    # typecheck, tests, release build, and publishability checks
 npm audit         # include development tooling in the dependency audit
 ```
 
+The browser smoke suite uses Playwright's free local browser builds:
+
+```bash
+npx playwright install chromium firefox webkit
+npm run build
+npm run test:e2e
+```
+
 During development, `npm test` and `npm run typecheck` provide faster focused feedback.
 
 Add or update tests when behavior changes. Describe manual browser checks in the pull request;

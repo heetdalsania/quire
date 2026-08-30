@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { QuireServer } from "@quire/server";
 
@@ -25,8 +27,11 @@ if (args.includes("--version") || args.includes("-v")) {
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`
   quire <directory>       Make a folder of Markdown files collaborative.
+  quire --demo             Try Quire in a disposable sample vault.
 
     -v, --version         Print the installed Quire version
+    --demo                Create sample Markdown in a temporary folder, then remove it
+                          when Quire stops. No existing files are read or changed.
     --port <n>            Port to listen on (default 4321)
     --host <addr>         Bind address (default 127.0.0.1, local only)
     --allow-host <name>   Additionally trust this hostname (repeatable). Needed only
@@ -58,7 +63,47 @@ const flag = (name, fallback) => {
 };
 
 const positional = args.filter((a, i) => !a.startsWith("--") && !String(args[i - 1] ?? "").startsWith("--"));
-const root = resolve(positional[0] ?? process.cwd());
+const demo = args.includes("--demo");
+let demoRoot = null;
+if (demo) {
+  demoRoot = await mkdtemp(join(tmpdir(), "quire-demo-"));
+  await Promise.all([
+    writeFile(join(demoRoot, "welcome.md"), `# Welcome to Quire
+
+This vault is disposable. Explore freely: it is removed when Quire stops.
+
+## Try the editor
+
+Type beside a collaborator, select text to leave a comment, or switch on suggesting mode.
+
+## Bring an agent
+
+Run the MCP command shown in the README, then ask the agent to improve this document.
+`, "utf8"),
+    writeFile(join(demoRoot, "project-plan.md"), `# Launch plan
+
+- [x] Keep the source as plain Markdown
+- [x] Make every collaborator visible
+- [ ] Invite the first reviewers
+
+## Principle
+
+Agents should work beside people, not rewrite their files behind the scenes.
+`, "utf8"),
+    writeFile(join(demoRoot, "architecture.md"), `# Architecture
+
+\`\`\`mermaid
+flowchart LR
+  Human --> CRDT
+  Agent --> CRDT
+  CRDT --> Markdown
+\`\`\`
+
+The filesystem remains the source of truth.
+`, "utf8"),
+  ]);
+}
+const root = demoRoot ?? resolve(positional[0] ?? process.cwd());
 // The repository build comes first. Both layouts can exist at once -- `build:release`
 // stages a copy beside the binary -- and in a clone the live build is the one that
 // changes, so preferring the staged copy would serve a stale client after every release.
@@ -75,26 +120,33 @@ const allowedHosts = args.reduce((acc, arg, i) => {
   return acc;
 }, []);
 
-const server = await QuireServer.start({
-  root,
-  webRoot,
-  port: Number(flag("--port", 4321)),
-  host: flag("--host", "127.0.0.1"),
-  allowedHosts,
-  git: args.includes("--git") && !args.includes("--no-git") ? {} : false,
-  // Discover is index-only: entries are fetched from their own repositories on request.
-  ...(args.includes("--no-discover") || !registryPath ? {} : { registryPath }),
-  githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
-  allowExec: args.includes("--allow-exec"),
-  history: args.includes("--history"),
-  persist: !args.includes("--no-persist"),
-});
+let server;
+try {
+  server = await QuireServer.start({
+    root,
+    webRoot,
+    port: Number(flag("--port", 4321)),
+    host: flag("--host", "127.0.0.1"),
+    allowedHosts,
+    git: args.includes("--git") && !args.includes("--no-git") ? {} : false,
+    // Discover is index-only: entries are fetched from their own repositories on request.
+    ...(args.includes("--no-discover") || !registryPath ? {} : { registryPath }),
+    githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),
+    allowExec: args.includes("--allow-exec"),
+    history: args.includes("--history"),
+    persist: !args.includes("--no-persist"),
+  });
+} catch (error) {
+  if (demoRoot) await rm(demoRoot, { recursive: true, force: true });
+  throw error;
+}
 
 const count = server.vault.list().length;
 console.log(`\n  Quire\n`);
 console.log(`  vault   ${root}`);
 console.log(`  docs    ${count} markdown file${count === 1 ? "" : "s"}`);
 console.log(`  local   http://127.0.0.1:${server.port}\n`);
+if (demoRoot) console.log(`  demo    disposable -- removed when Quire stops`);
 const snapshots = server.git && (await server.git.isRepo());
 console.log(`  git     ${snapshots ? "snapshots on (commits when idle)" : "not a repository -- snapshots off"}`);
 if (args.includes("--history")) {
@@ -107,9 +159,17 @@ if (allowedHosts.length > 0) console.log(`  trusted ${allowedHosts.join(", ")}`)
 console.log(`\n  Local only. Nothing is uploaded and no account is needed.`);
 console.log(`  Ctrl+C to stop.\n`);
 
+let shuttingDown = false;
 const shutdown = async () => {
-  await server.close();
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    await server.close();
+  } finally {
+    if (demoRoot) await rm(demoRoot, { recursive: true, force: true });
+  }
   process.exit(0);
 };
-process.on("SIGINT", shutdown);
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
 process.on("SIGTERM", shutdown);

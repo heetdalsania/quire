@@ -6,11 +6,17 @@ import { PNG } from "pngjs";
 
 const dir = join(import.meta.dirname, "frames");
 const meta = JSON.parse(await readFile(join(dir, "meta.json"), "utf8"));
-const files = (await readdir(dir)).filter((f) => f.endsWith(".png")).sort();
+const allFiles = (await readdir(dir)).filter((f) => f.endsWith(".png")).sort();
 
 const SCALE = Number(process.env.SCALE ?? 1);
 const COLORS = Number(process.env.COLORS ?? 128);
+const START = Math.max(0, Number(process.env.START ?? 0));
+const END = Math.min(allFiles.length - 1, Number(process.env.END ?? allFiles.length - 1));
+const STEP = Math.max(1, Number(process.env.STEP ?? 1));
 const out = process.env.OUT ?? join(import.meta.dirname, "quire-demo.gif");
+const files = allFiles.slice(START, END + 1).filter((_, i) => i % STEP === 0);
+
+if (files.length === 0) throw new Error(`No frames selected (${START}..${END}, step ${STEP})`);
 
 const decode = async (file) => {
   const png = PNG.sync.read(await readFile(join(dir, file)));
@@ -52,7 +58,7 @@ for (const s of samples) { merged.set(s, at); at += s.length; }
 const palette = quantize(merged, COLORS, { format: "rgb565" });
 
 const gif = GIFEncoder();
-const delay = Math.round(1000 / meta.fps);
+const delay = Math.round((1000 * STEP) / meta.fps);
 let dims = null;
 for (const file of files) {
   const { data, width, height } = await decode(file);
@@ -65,4 +71,5 @@ for (const file of files) {
 }
 gif.finish();
 await writeFile(out, gif.bytes());
-console.log(`${out}  ${dims.width}x${dims.height}  ${files.length} frames  ${(gif.bytes().length / 1048576).toFixed(2)} MB`);
+const duration = (files.length * delay) / 1000;
+console.log(`${out}  ${dims.width}x${dims.height}  ${files.length} frames  ${duration.toFixed(1)}s  ${(gif.bytes().length / 1048576).toFixed(2)} MB`);

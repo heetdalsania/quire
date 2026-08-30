@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc --build && npm run build -w @quire/web",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "typecheck": "tsc --build --pretty",
     "verify": "npm run typecheck && npm test && npm run build:release && npm run check:release",
@@ -20,6 +21,7 @@
     "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.2",
     "esbuild": "^0.28.2",
     "typescript": "^5.7.2",

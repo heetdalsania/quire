@@ -12,6 +12,7 @@ is `npx quiredocs <folder>` and that has to work with one install.
 npm run build:release   # tsc + vite + esbuild, then stage packages/cli
 npm run check:release   # refuses to publish something that will not run
 npm run verify          # full pre-release gate: types, tests, build, release checks
+npm run test:e2e        # Chromium, Firefox, and WebKit against the disposable demo
 ```
 
 `build:release` bundles both binaries with their dependencies and copies the web client and
@@ -35,7 +36,8 @@ printf '# Hi\n\nhello\n' > vault/hi.md
 ./node_modules/.bin/quire vault --port 4321
 ```
 
-CI does this on every push, along with a Docker build and run.
+CI does this on every push, along with a Docker build and run, Windows filesystem tests, and
+Chromium, Firefox, and WebKit browser smoke tests.
 
 ## Publishing
 
@@ -47,9 +49,9 @@ git push origin main v<version>
 
 `prepublishOnly` runs `check:release` first, so a stale bundle cannot be published.
 
-After the beta has been dogfooded, change the version to `0.1.0`, move this changelog
-entry to that version, rerun `npm run verify` and the packed-package smoke test, then
-publish without `--tag beta`. Do not move the npm `latest` tag to a prerelease version.
+Until a stable release exists, both npm `beta` and `latest` point to the current public beta so a
+bare `npx quiredocs` receives the safest build. After dogfooding, change the version to `0.1.0`,
+move the changelog entry to that version, rerun every gate, and publish without `--tag beta`.
 
 ## What needs an account
 

@@ -23,7 +23,7 @@ subscription, or telemetry.
 ## Quick start
 
 ```bash
-npx quiredocs@beta ~/my-notes
+npx quiredocs ~/my-notes
 ```
 
 Open `http://127.0.0.1:4321` in a browser. Press `Ctrl+C` in the terminal when you are done.
@@ -36,6 +36,12 @@ node packages/cli/bin/quire.js ~/my-notes
 ```
 
 No account. No signup. Binds `127.0.0.1` by default. Core editing makes no outbound requests.
+
+Not ready to point it at your own files? Start a sample vault that is deleted when Quire stops:
+
+```bash
+npx quiredocs --demo
+```
 
 ## Where it sits
 
@@ -83,11 +89,50 @@ diff you read afterwards.
 
 ## Connecting an agent
 
-Run the vault, then point any MCP client at it:
+Keep Quire running, then add its local MCP server to the client you use. These commands download
+the published Quire package from npm; they do not require a Quire account or credential.
+
+### Claude Code
 
 ```bash
-npx -p quiredocs@beta quire-mcp --url http://127.0.0.1:4321 --name Claude
+claude mcp add quire -- npx -y -p quiredocs@latest quire-mcp \
+  --url http://127.0.0.1:4321 --name "Claude Code"
 ```
+
+On native Windows, put `cmd /c` before `npx`:
+
+```powershell
+claude mcp add quire -- cmd /c npx -y -p quiredocs@latest quire-mcp --url http://127.0.0.1:4321 --name "Claude Code"
+```
+
+### Codex
+
+```bash
+codex mcp add quire -- npx -y -p quiredocs@latest quire-mcp \
+  --url http://127.0.0.1:4321 --name Codex
+```
+
+### Cursor
+
+Add this to `.cursor/mcp.json` in the project where Cursor should use Quire:
+
+```json
+{
+  "mcpServers": {
+    "quire": {
+      "command": "npx",
+      "args": [
+        "-y", "-p", "quiredocs@latest", "quire-mcp",
+        "--url", "http://127.0.0.1:4321",
+        "--name", "Cursor"
+      ]
+    }
+  }
+}
+```
+
+Restart or reload the client after adding Quire. The AI client may require its own account or paid
+plan; that is separate from Quire, which remains free and local.
 
 Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `append_document`,
 `list_suggestions`, `list_comments`, `add_comment`, `search_vault`.

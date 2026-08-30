@@ -9,6 +9,8 @@ coverage/
 .quire/
 .agents/
 tools/recorder/frames/
+playwright-report/
+test-results/
 
 # Release bundle, assembled by scripts/build-release.mjs
 packages/cli/dist/

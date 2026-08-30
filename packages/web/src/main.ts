@@ -863,14 +863,16 @@ async function open(path: string): Promise<void> {
   // without -- a server round trip.
   persistence = new IndexeddbPersistence(`quire:${epoch}:${path}`, doc);
 
-  provider = new SyncProvider(url.toString(), doc, (connected) => {
+  const nextProvider = new SyncProvider(url.toString(), doc, (connected) => {
+    if (provider !== nextProvider) return;
     offline = !connected;
     setStatus(connected ? "live" : "offline", connected);
   });
+  provider = nextProvider;
   registerLocalAuthor(doc, me.id, me.name, me.color);
   configureSuggesting(ytext, { id: me.id, name: me.name, color: me.color, kind: "human" });
-  provider.awareness.setLocalStateField("user", { name: me.name, color: me.color, kind: me.kind });
-  provider.awareness.on("change", () => { renderPresence(); renderRail(); });
+  nextProvider.awareness.setLocalStateField("user", { name: me.name, color: me.color, kind: me.kind });
+  nextProvider.awareness.on("change", () => { renderPresence(); renderRail(); });
   comments.yarray.observeDeep(renderRail);
 
   view = new EditorView({
@@ -884,7 +886,7 @@ async function open(path: string): Promise<void> {
         quireEditorTheme,
         quireHighlight,
         EditorView.lineWrapping,
-        yCollab(ytext, provider.awareness),
+        yCollab(ytext, nextProvider.awareness),
         suggestingExtension(),
         // The server enforces this too; the editor reflects it so a reviewer is not
         // typing into text that will be silently discarded.

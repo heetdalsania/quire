@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-beta.3 - 2026-08-30
+
+### Onboarding and compatibility
+- Added `quire --demo`, which creates a disposable three-document vault and removes it on exit.
+- Added copy-paste MCP setup for Claude Code, Codex, and Cursor, including native Windows guidance.
+- Added automated browser smoke coverage for Chromium, Firefox, and WebKit.
+- Extended the filesystem and collaboration test matrix to Windows, alongside macOS and Linux.
+- Added reproducible launch artwork: a social preview, current static screenshot, compact core demo,
+  and Product Hunt thumbnail, all derived from the real application recorder.
+
+### Reliability
+- Prevented a closed document connection from incorrectly marking the newly opened document offline.
+- Made disposable demo cleanup handle both interactive interrupts and automated termination.
+
 ## 0.1.0-beta.2 - 2026-08-29
 
 ### Trust and repository hygiene
