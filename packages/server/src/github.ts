@@ -66,9 +66,6 @@ export async function searchGithub(query: string, limit = 24): Promise<GithubHit
       headers: {
         accept: "application/vnd.github+json",
         "user-agent": "quire-discover",
-        // A token is optional and never required. When present it is the operator's own,
-        // read from the environment; Quire neither stores nor asks for credentials.
-        ...(process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
       },
     });
 
@@ -128,7 +125,6 @@ export async function listMarkdown(repo: string, branch: string): Promise<Array<
     headers: {
       accept: "application/vnd.github+json",
       "user-agent": "quire-discover",
-      ...(process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
     },
   });
   if (res.status === 403 || res.status === 429) {

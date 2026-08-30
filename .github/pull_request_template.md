@@ -13,7 +13,6 @@
 - [ ] Relevant tests were added or updated
 - [ ] `npm run verify` passes
 - [ ] User-facing documentation was updated when needed
-- [ ] `AGENT_CHANGELOG.md` was updated when this changes behavior, release state, architecture, or an important decision
 
 ## Risk
 

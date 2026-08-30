@@ -5,17 +5,19 @@
 Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its own origin.
 
 - **No telemetry, no analytics, no phone-home.** Quire never reports on you.
-- **Outbound requests happen only in Discover, and only when you ask.** Three of them exist:
+- **Core editing makes no outbound requests.** Discover has three user-triggered requests:
   fetching a document from `raw.githubusercontent.com`, searching repositories via
-  `api.github.com`, and listing a repository's Markdown files. Nothing else in Quire touches the
-  network. Install URLs are derived from the registry index rather than from the caller and the
+  `api.github.com`, and listing a repository's Markdown files. Install URLs are derived from the registry index rather than from the caller and the
   host is pinned, so the endpoint cannot be turned into a general-purpose fetcher for your
   machine's network position. `--no-search` keeps the curated index but disables live search;
-  `--no-discover` gives a build that makes no outbound requests at all.
+  `--no-discover` removes the Discover surface and its requests.
+- **Direct peer setup uses public STUN only after a person chooses it.** The browser contacts
+  `stun.l.google.com` or `stun1.l.google.com` to discover a route. Document bytes travel over an
+  encrypted WebRTC data channel directly between peers; Quire has no TURN relay or hosted service.
+  Do not choose direct peer setup if contacting public STUN is unacceptable.
 - **GitHub search needs no account.** It uses the unauthenticated repository-search endpoint, which
   is rate limited to roughly ten requests a minute; results are cached and limiting is reported
-  plainly. If you happen to have a token, `GITHUB_TOKEN` in the environment raises the limit —
-  Quire never asks for, stores, or transmits credentials of its own.
+  plainly. Quire does not read or transmit `GITHUB_TOKEN` or any other credential.
 - **No accounts.** Identity is a display name generated in your browser.
 - **Requests are origin-checked.** Browsers permit cross-origin WebSocket upgrades with no
   preflight, and a cross-origin `GET /api/files` needs no CORS approval to be *sent*. Without a
@@ -26,6 +28,8 @@ Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its
 - **Document paths are validated twice** — at the transport, and again in `Vault.getDoc`, which is
   the boundary that actually writes files and so refuses rather than trusting its caller.
 - **Writes are atomic** (temp file + rename), so a reader never sees a half-written document.
+- **Git snapshots are opt-in.** `--git` commits only Markdown paths Quire changed. It does not
+  include unrelated working-tree or staged changes, and it never pushes or changes remotes.
 
 ## Exposing a vault beyond your machine
 
@@ -56,6 +60,8 @@ deliberately want to share attribution history. `--no-persist` turns it off enti
 
 - **No authentication or per-document permissions.** Access is all-or-nothing per vault.
 - **No encryption at rest or in transit.** Run behind TLS if you expose it.
+- **Direct peer setup reveals network metadata to public STUN.** Peers use WebRTC encryption, but
+  each side and the STUN service can observe connection metadata and IP addresses.
 - **Documents load eagerly at startup.** A vault with many thousands of files will use
   proportional memory.
 - **Edit history is off by default.** `--history` enables replay, but disabling Yjs

@@ -24,7 +24,7 @@ body:
     attributes:
       label: Scope check
       options:
-        - label: I checked PLAN.md and this request is not explicitly out of scope.
-          required: true
         - label: I searched existing issues and discussions for the same request.
+          required: true
+        - label: This keeps Markdown files portable and user-owned.
           required: true

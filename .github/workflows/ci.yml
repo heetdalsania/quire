@@ -47,7 +47,7 @@ jobs:
           npm init -y >/dev/null
           npm install "$GITHUB_WORKSPACE"/packages/cli/quiredocs-*.tgz --silent
           printf '# Smoke\n\nhello\n' > vault/smoke.md
-          ./node_modules/.bin/quire vault --port 4321 --no-git &
+          ./node_modules/.bin/quire vault --port 4321 &
           sleep 5
           curl -fsS http://127.0.0.1:4321/api/files | grep -q smoke.md
           curl -fsS http://127.0.0.1:4321/ | grep -q '<title>Quire</title>'

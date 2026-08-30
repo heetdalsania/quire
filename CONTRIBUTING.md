@@ -4,9 +4,9 @@ Thanks for helping make Quire better. Bug reports, focused fixes, documentation 
 and well-scoped feature proposals are welcome.
 
 Quire is pre-1.0 and moving fast. Before opening a large pull request, please start a
-[discussion](https://github.com/heetdalsania/quire/discussions) or open a feature request. The
-scope boundaries in [PLAN.md](./PLAN.md) §2 are deliberate, and several commonly-requested
-features (WYSIWYG, whiteboards, plugin APIs) are explicitly out of scope rather than merely unbuilt.
+[discussion](https://github.com/heetdalsania/quire/discussions) or open a feature request. Quire is
+focused on collaborative plain Markdown rather than becoming a general-purpose canvas or plugin
+platform, so explain how a large proposal strengthens that focus.
 
 ## Before you start
 
@@ -50,13 +50,6 @@ These are load-bearing. A change that violates one is a bug even if the tests pa
 3. **Loop prevention comes from transaction origins, not content comparison.** Anything applied
    with `DISK_ORIGIN` must never trigger a disk write.
 4. **Git is the archive, never the transport.**
-
-## Agent handoffs
-
-Coding agents must read [CLAUDE.md](./CLAUDE.md) and [AGENT_CHANGELOG.md](./AGENT_CHANGELOG.md)
-before changing the repository. Append a dated entry to the agent changelog when work changes
-behavior, release state, architecture, or an important decision. Record commands actually run;
-do not describe an unrun check as passing.
 
 ## Pull requests
 

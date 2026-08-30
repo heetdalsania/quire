@@ -30,9 +30,9 @@ The test suite does not prove the *package* works. This does:
 ```bash
 cd packages/cli && npm pack
 mkdir -p /tmp/smoke/vault && cd /tmp/smoke && npm init -y
-npm install /path/to/quiredocs-0.1.0-beta.1.tgz
+npm install /path/to/quiredocs-<version>.tgz
 printf '# Hi\n\nhello\n' > vault/hi.md
-./node_modules/.bin/quire vault --port 4321 --no-git
+./node_modules/.bin/quire vault --port 4321
 ```
 
 CI does this on every push, along with a Docker build and run.
@@ -41,8 +41,8 @@ CI does this on every push, along with a Docker build and run.
 
 ```bash
 npm publish --access public --tag beta   # from packages/cli
-git tag v0.1.0-beta.1
-git push origin main v0.1.0-beta.1
+git tag v<version>
+git push origin main v<version>
 ```
 
 `prepublishOnly` runs `check:release` first, so a stale bundle cannot be published.
@@ -58,8 +58,9 @@ that belong to a person:
 
 1. **npm** — create the account, then `npm login`, then `npm publish --access public` from
    `packages/cli`. The name `quire` is taken by an unrelated package, so this project uses
-   `quiredocs`; the installed binaries remain `quire` and `quire-mcp`. Confirm `quiredocs`
-   is still available immediately before the first publish.
+   `quiredocs`; the installed binaries remain `quire` and `quire-mcp`. Public packages are
+   included in npm's free plan; a paid npm plan is needed only for private packages and related
+   paid account features.
 2. **GitHub settings** — the public repository already lives at `heetdalsania/quire`.
    Enable private vulnerability reporting and require the CI workflow before merging to
    `main`. These settings require an owner in the GitHub UI.

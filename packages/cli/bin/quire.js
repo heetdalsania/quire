@@ -31,7 +31,7 @@ if (args.includes("--help") || args.includes("-h")) {
     --host <addr>         Bind address (default 127.0.0.1, local only)
     --allow-host <name>   Additionally trust this hostname (repeatable). Needed only
                           when deliberately exposing the vault, e.g. via a tunnel.
-    --no-git              Disable periodic git snapshots
+    --git                 Opt in to periodic git snapshots of Markdown changed by Quire
     --no-discover         Disable the Discover tab (no outbound requests at all)
     --no-search           Keep the curated index, but disable live GitHub search
     --no-persist          Do not save collaboration state. Comments, attribution and
@@ -46,7 +46,8 @@ if (args.includes("--help") || args.includes("-h")) {
   Requests are refused unless they come from loopback or an allowed host, so a web page
   you happen to have open cannot reach into your vault.
 
-  No account, no signup, no telemetry, no network calls.
+  No account, no signup, no telemetry. Core editing stays local. Discover and direct
+  peer setup contact public services only when you choose those features.
 `);
   process.exit(0);
 }
@@ -80,7 +81,7 @@ const server = await QuireServer.start({
   port: Number(flag("--port", 4321)),
   host: flag("--host", "127.0.0.1"),
   allowedHosts,
-  git: args.includes("--no-git") ? false : {},
+  git: args.includes("--git") && !args.includes("--no-git") ? {} : false,
   // Discover is index-only: entries are fetched from their own repositories on request.
   ...(args.includes("--no-discover") || !registryPath ? {} : { registryPath }),
   githubSearch: !args.includes("--no-discover") && !args.includes("--no-search"),

@@ -16,15 +16,22 @@ export interface GitSnapshotOptions {
 /**
  * Periodic git commits of the vault.
  *
- * Git is the archive, never the transport -- see PLAN.md section 2. Nothing here takes
- * part in live sync; it only records restore points, which is what makes the history
- * useful: every commit is a real commit and every diff a real diff.
+ * Git is the archive, never the transport. Nothing here takes part in live sync; it only
+ * records restore points. A snapshot must include only document paths Quire changed. It
+ * must never sweep unrelated work from the repository into one of its commits.
  */
 export class GitSnapshotter {
   private timer: NodeJS.Timeout | null = null;
   private lastActivity = 0;
-  private dirty = false;
+  private readonly pendingPaths = new Set<string>();
   private running = false;
+
+  private readonly onWritten = (event: { path: string }): void => this.mark(event.path);
+  private readonly onDeleted = (event: { path: string }): void => this.mark(event.path);
+  private readonly onRenamed = (event: { from: string; to: string }): void => {
+    this.mark(event.from);
+    this.mark(event.to);
+  };
 
   constructor(
     private readonly vault: Vault,
@@ -49,25 +56,25 @@ export class GitSnapshotter {
 
   start(): void {
     if (this.timer) return;
-    const onChange = (): void => {
-      this.dirty = true;
-      this.lastActivity = Date.now();
-    };
-    this.vault.on("doc:written", onChange);
-    this.vault.on("doc:delete", onChange);
-    this.vault.on("doc:rename", onChange);
+    this.vault.on("doc:written", this.onWritten);
+    this.vault.on("doc:delete", this.onDeleted);
+    this.vault.on("doc:rename", this.onRenamed);
 
     this.timer = setInterval(() => void this.tick(), Math.min(this.intervalMs, this.quietMs));
     this.timer.unref?.();
   }
 
+  private mark(path: string): void {
+    this.pendingPaths.add(path);
+    this.lastActivity = Date.now();
+  }
+
   private async tick(): Promise<void> {
-    if (this.running || !this.dirty) return;
+    if (this.running || this.pendingPaths.size === 0) return;
     if (Date.now() - this.lastActivity < this.quietMs) return;
     this.running = true;
     try {
       await this.commit();
-      this.dirty = false;
     } catch {
       // A failing snapshot must never disturb live editing.
     } finally {
@@ -75,15 +82,22 @@ export class GitSnapshotter {
     }
   }
 
-  /** Commit any pending changes. Returns the commit sha, or null if there was nothing. */
+  /** Commit pending Markdown paths written by Quire, without touching unrelated work. */
   async commit(message?: string): Promise<string | null> {
     if (!(await this.isRepo())) return null;
+    const paths = [...this.pendingPaths].sort();
+    if (paths.length === 0) return null;
+
     const cwd = this.vault.root;
+    const pathspecs = paths.map((path) => `:(literal)${path}`);
 
-    const { stdout: status } = await exec("git", ["status", "--porcelain"], { cwd });
-    if (status.trim() === "") return null;
+    const { stdout: status } = await exec("git", ["status", "--porcelain", "--", ...pathspecs], { cwd });
+    if (status.trim() === "") {
+      for (const path of paths) this.pendingPaths.delete(path);
+      return null;
+    }
 
-    await exec("git", ["add", "-A"], { cwd });
+    await exec("git", ["add", "-A", "--", ...pathspecs], { cwd });
     const stamp = new Date().toISOString().replace("T", " ").slice(0, 19);
     await exec(
       "git",
@@ -94,11 +108,15 @@ export class GitSnapshotter {
         `user.email=${this.opts.authorEmail ?? "snapshot@quire.local"}`,
         "commit",
         "-q",
+        "--only",
         "-m",
         message ?? `Quire snapshot ${stamp}`,
+        "--",
+        ...pathspecs,
       ],
       { cwd },
     );
+    for (const path of paths) this.pendingPaths.delete(path);
     const { stdout } = await exec("git", ["rev-parse", "HEAD"], { cwd });
     return stdout.trim();
   }
@@ -124,5 +142,8 @@ export class GitSnapshotter {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.vault.off("doc:written", this.onWritten);
+    this.vault.off("doc:delete", this.onDeleted);
+    this.vault.off("doc:rename", this.onRenamed);
   }
 }

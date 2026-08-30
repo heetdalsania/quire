@@ -68,10 +68,10 @@ export class RegistryFetchError extends Error {}
 /**
  * Fetch an entry's Markdown from its source repository.
  *
- * This is the only outbound network request Quire ever makes, and only when a person
- * explicitly asks for a document. The URL is derived from the index rather than supplied
- * by the caller, and the host is pinned, so a crafted request cannot turn this into a
- * general-purpose fetcher for the machine's network position.
+ * This request runs only when a person explicitly asks for a registry document. The URL
+ * is derived from the index rather than supplied by the caller, and the host is pinned, so
+ * a crafted request cannot turn this into a general-purpose fetcher for the machine's
+ * network position.
  */
 export async function fetchEntry(entry: RegistryEntry, timeoutMs = 15_000): Promise<string> {
   const url = rawUrl(entry);

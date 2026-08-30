@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-beta.2 - 2026-08-29
+
+### Trust and repository hygiene
+- Made git snapshots opt-in with `--git` and restricted snapshot commits to Markdown paths Quire
+  changed, preserving unrelated working-tree and staged changes.
+- Removed implicit `GITHUB_TOKEN` use; Discover now uses only anonymous public GitHub endpoints.
+- Documented every filesystem, network, code-execution, agent, sharing, and install-time permission.
+- Removed internal agent, planning, business, marketing, deployment, and product-strategy documents
+  from the public repository tree.
+- Replaced the demo with a current recording generated from the real application.
+
 ## 0.1.0-beta.1 - 2026-08-28
 
 First release. Point Quire at a folder of Markdown and it becomes a live multiplayer
@@ -16,7 +27,6 @@ files behind your back.
   Mermaid remains lazy-loaded only when a document contains a diagram.
 - Reconciled security, licensing, package, release, and launch documentation with the code
   that is actually shipped.
-- Added `AGENT_CHANGELOG.md` as the append-only cross-agent handoff record.
 - Added grouped monthly Dependabot updates for npm dependencies and GitHub Actions.
 - Updated GitHub's checkout and Node setup actions to their Node 24-based major releases.
 - Upgraded the test runner to patched Vitest 4.1 releases; both the complete and

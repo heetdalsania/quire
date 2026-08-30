@@ -98,7 +98,7 @@ export class QuireServer {
     readonly vault: Vault,
     private readonly opts: QuireServerOptions,
   ) {
-    this.git = opts.git === false ? null : new GitSnapshotter(vault, opts.git ?? {});
+    this.git = opts.git ? new GitSnapshotter(vault, opts.git) : null;
 
     // Files created by an agent, by the registry, or by another tool used to require a
     // reload before they appeared in the sidebar -- which reads as the app being stale

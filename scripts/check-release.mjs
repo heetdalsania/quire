@@ -38,6 +38,7 @@ for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
 const pkg = JSON.parse(await readFile(join(cli, "package.json"), "utf8"));
 const expectedLicense = "AGPL-3.0-or-later";
 const expectedBins = { quire: "dist/quire.js", "quire-mcp": "dist/quire-mcp.js" };
+const forbiddenInstallScripts = ["preinstall", "install", "postinstall"];
 
 // The bundles must actually start. Nothing else here proves that.
 for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
@@ -69,6 +70,17 @@ for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
 if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
   // Workspace ranges like "*" do not resolve for anyone outside this repository.
   problems.push(`unbundled dependencies would not resolve: ${Object.keys(pkg.dependencies).join(", ")}`);
+}
+for (const script of forbiddenInstallScripts) {
+  if (pkg.scripts?.[script]) problems.push(`package must not define an install-time ${script} script`);
+}
+
+for (const entry of ["dist/quire.js", "dist/quire-mcp.js"]) {
+  if (!(await exists(entry))) continue;
+  const body = await readFile(join(cli, entry), "utf8");
+  if (body.includes("GITHUB_TOKEN")) {
+    problems.push(`${entry} reads GITHUB_TOKEN; published Quire must not forward ambient credentials`);
+  }
 }
 
 if (await exists("dist/quire.js")) {

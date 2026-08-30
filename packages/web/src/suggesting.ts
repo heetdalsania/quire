@@ -1,7 +1,13 @@
 import { EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { ySyncAnnotation } from "y-codemirror.next";
 import type * as Y from "yjs";
-import { type Author, insertAttributed, proposeDelete } from "@quire/bridge/attribution";
+import {
+  ATTR_AUTHOR,
+  type Author,
+  authorOrigin,
+  insertAttributed,
+  proposeDelete,
+} from "@quire/bridge/attribution";
 
 /**
  * Suggesting mode for people, the counterpart to the agent's `suggest` flag.
@@ -52,6 +58,7 @@ interface PendingChange {
   from: number;
   to: number;
   inserted: string;
+  resultFrom: number;
 }
 
 /**
@@ -81,15 +88,32 @@ function applyAsSuggestion(changes: PendingChange[]): void {
 
 export function suggestingExtension(): Extension {
   return EditorState.transactionFilter.of((tr: Transaction) => {
-    if (!suggesting || !tr.docChanged) return tr;
+    if (!tr.docChanged) return tr;
     // Remote work arriving through the Yjs binding is not this user typing.
     if (tr.annotation(ySyncAnnotation) !== undefined) return tr;
 
     const changes: PendingChange[] = [];
-    tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-      changes.push({ from: fromA, to: toA, inserted: inserted.toString() });
+    tr.changes.iterChanges((fromA, toA, fromB, _toB, inserted) => {
+      changes.push({ from: fromA, to: toA, inserted: inserted.toString(), resultFrom: fromB });
     });
     if (changes.length === 0) return tr;
+
+    if (!suggesting) {
+      // Let CodeMirror and y-codemirror apply the edit normally so native history, IME,
+      // selection and composition behavior stay intact. Once the insert exists in Y.Text,
+      // add its durable author mark without changing a byte of visible text.
+      queueMicrotask(() => {
+        if (!text?.doc || !author) return;
+        text.doc.transact(() => {
+          for (const change of changes) {
+            if (change.inserted.length > 0) {
+              text!.format(change.resultFrom, change.inserted.length, { [ATTR_AUTHOR]: author!.id });
+            }
+          }
+        }, authorOrigin(author.id));
+      });
+      return tr;
+    }
 
     // Rewrite outside the filter: mutating the document from inside a transaction filter
     // re-enters the editor mid-update.

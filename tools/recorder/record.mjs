@@ -72,6 +72,23 @@ async function placeCursorAfter(needle) {
   await page.focus(".cm-content");
 }
 
+async function selectText(needle) {
+  await page.evaluate((n) => {
+    const view = window.__quireView;
+    if (!view) return;
+    const from = view.state.doc.toString().indexOf(n);
+    if (from >= 0) view.dispatch({ selection: { anchor: from, head: from + n.length }, scrollIntoView: true });
+  }, needle);
+  await page.focus(".cm-content");
+}
+
+async function toggleToolbarMenu(id, pause = 1500) {
+  await page.click(id);
+  await sleep(pause);
+  await page.click(id);
+  await sleep(350);
+}
+
 // ---- choreography --------------------------------------------------------
 await sleep(1200);
 
@@ -117,10 +134,31 @@ await sleep(1600);
 await page.evaluate(() => {
   [...document.querySelectorAll("#suggestions button")].find((b) => b.textContent === "Accept")?.click();
 });
-await sleep(1500);
+await sleep(1000);
 
-// 6. Reveal authorship.
+// 6. Add a durable comment anchored to text.
+await selectText("Retries are always safe.");
+await page.click("#comment-btn");
+await page.waitForSelector(".composer textarea");
+await page.type(".composer textarea", "Define the retry budget before launch.", { delay: 28 });
+await page.click(".composer button.primary");
+await sleep(1400);
+
+// 7. Reveal authorship.
 await page.click("#attr-btn");
+await sleep(1600);
+
+// 8. Show the newer review and portability surfaces, all in the real toolbar.
+await toggleToolbarMenu("#insight-btn", 2300); // provenance, agent policy, replay status
+await toggleToolbarMenu("#export-btn", 1700);  // Markdown/HTML/text/PDF/receipt
+await toggleToolbarMenu("#share-btn", 1900);   // scoped capability links and review requests
+
+// 9. Finish on the theme and typography controls, then choose a real theme.
+await page.click("#display-btn");
+await sleep(900);
+await page.evaluate(() => {
+  [...document.querySelectorAll(".theme-swatch")].find((b) => b.textContent?.trim() === "Nord")?.click();
+});
 await sleep(2200);
 
 recording = false;

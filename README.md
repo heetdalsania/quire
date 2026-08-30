@@ -17,8 +17,8 @@ revertable edits. Your documents stay plain `.md` files on disk, in your git rep
 proposes a change that never touches the file until it is accepted, and then authorship is
 revealed. Nobody reloads, and nothing conflicts.*
 
-**Public beta:** [`v0.1.0-beta.1`](https://github.com/heetdalsania/quire/releases/tag/v0.1.0-beta.1)
-is available now. Quire requires Node.js 22 or newer and runs locally with no account or telemetry.
+**Public beta:** Quire requires Node.js 22 or newer and runs locally with no Quire account,
+subscription, or telemetry.
 
 ## Quick start
 
@@ -35,8 +35,7 @@ npm install && npm run build
 node packages/cli/bin/quire.js ~/my-notes
 ```
 
-No account. No signup. Binds `127.0.0.1` by default. Quire touches the network only in Discover,
-and only when you ask it to — `--no-search` or `--no-discover` remove even that.
+No account. No signup. Binds `127.0.0.1` by default. Core editing makes no outbound requests.
 
 ## Where it sits
 
@@ -68,7 +67,7 @@ diff you read afterwards.
 | **Wiki-links** | `[[links]]`, backlinks panel, unresolved links flagged |
 | **Search** | ripgrep-backed, with an in-process fallback |
 | **Mermaid** | Rendered in the live preview |
-| **Git snapshots** | Periodic commits on quiet. Git is the archive, never the transport |
+| **Git snapshots** | Optional `--git` restore points commit only Markdown paths Quire changed; snapshots are off by default |
 | **Discover** | Browse widely-used Markdown — agent configs, skills, conventions — and add it to your vault with provenance recorded. An index, not a host: files come from their own repositories |
 | **Durable collaboration** | Authorship, comments, provenance and policy persist in `.quire/state/` and survive a restart. The Markdown stays clean; delete the directory and you lose only the collaboration layer |
 | **Themes** | Sixteen colourways — Paper, Ink, Nord, Gruvbox, Solarized, Dracula, Tokyo Night, Catppuccin, Everforest, Monokai, Sepia, Terminal, and classic light and dark. Contrast is corrected per theme and asserted in tests |
@@ -96,12 +95,39 @@ Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `app
 The agent gets a presence identity and a cursor. You can type straight through its edits —
 CRDTs make that a non-event.
 
-## Security
+## Trust and permissions
 
-Binds `127.0.0.1`, serves only its own origin, and refuses cross-origin requests so a web page you
-happen to have open cannot reach your vault. No telemetry, no accounts, nothing leaves the machine.
-**There is no authentication**, so treat `--host 0.0.0.0` as "anyone who can reach this port can
-edit everything". See [SECURITY.md](./SECURITY.md).
+Quire is open source under AGPL-3.0-or-later, and the npm package is built from this
+repository. The package has no runtime dependency downloads and no `preinstall`, `install`, or
+`postinstall` hooks. Its `prepublishOnly` script is a maintainer-side release check; npm does not
+run it when somebody installs Quire.
+
+What Quire can do on a user's computer:
+
+| Surface | Default | Exact behavior |
+|---|---|---|
+| **Files** | On | Reads Markdown under the folder passed on the command line. Writes edited Markdown, collaboration state in `.quire/state/`, and `quire.lock` when a Discover item is added. Paths outside the chosen folder are rejected |
+| **Git** | Off | `--git` enables local snapshots. Quire commits only Markdown paths it changed and does not push, pull, alter remotes, or include unrelated staged work |
+| **Network** | Core editing is offline | Discover contacts `api.github.com` and `raw.githubusercontent.com` only after a person searches, previews, or installs. Direct peer setup contacts Google's public STUN service only after a person chooses that command; document bytes then travel over encrypted WebRTC directly between peers, with no Quire relay |
+| **Code execution** | Off | `--allow-exec` permits a person to run a selected fenced block as their own OS user. Nothing runs when a document opens, and execution is refused when Quire is bound beyond loopback |
+| **Agents** | Disconnected | An MCP client receives vault read/edit tools only after the user starts `quire-mcp` and points it at the local server. Connect only agents you trust with that folder |
+| **Sharing** | Local only | Share links are capabilities served by the running Quire process. Quire does not upload the vault or operate a hosted relay |
+
+Quire has no analytics, advertising SDK, auto-updater, credential prompt, background service, or
+payment integration. Discover does not read or forward `GITHUB_TOKEN`. Third-party Markdown added
+through Discover is data, not executable code, but agent instruction files can influence an agent
+that later reads them; inspect imported content before relying on it.
+
+The server serves only its own origin and rejects cross-origin browser requests. **There is no
+authentication**, so treat `--host 0.0.0.0` as "anyone who can reach this port can read and edit the
+vault." The complete threat model and limitations are in [SECURITY.md](./SECURITY.md).
+
+## Cost
+
+Quire itself is free to download, run, self-host, and publish as a public npm package. It requires
+no paid Quire infrastructure. Your computer, internet connection, and any AI provider you connect
+are separate: Claude, OpenAI, a hosted VM, a domain, a tunnel, Codespaces, or a larger CI runner may
+charge under that provider's own plan. None is required for local Quire.
 
 ## Self-hosting
 
@@ -124,15 +150,7 @@ If Quire solves a problem you care about, starring the repository helps other pe
 
 | File | What's in it |
 |---|---|
-| **[CLAUDE.md](./CLAUDE.md)** | Orientation for an AI agent working on Quire — architecture, invariants, every bug found and why |
-| **[AGENT_CHANGELOG.md](./AGENT_CHANGELOG.md)** | Append-only handoff ledger for every coding agent: decisions, files, verification, and remaining work |
-| **[PLAN.md](./PLAN.md)** | Execution plan, locked decisions, phases, outcomes, risks |
-| [DESIGN.md](./DESIGN.md) | Competitive landscape, architecture, the hard problems |
-| [BUSINESS.md](./BUSINESS.md) | Cost math, deployment, funding paths |
-| [MARKETING.md](./MARKETING.md) | Positioning, launch sequence, what to measure |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | How this reaches people, and what each route costs |
-| [IDEAS.md](./IDEAS.md) | Speculative features worth building, and what to avoid |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | Architecture invariants — read before a large PR |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Development setup, verification, and architecture invariants |
 | [SECURITY.md](./SECURITY.md) | Threat model and known limitations |
 | [RELEASING.md](./RELEASING.md) | How to build, verify and publish a release |
 | [CHANGELOG.md](./CHANGELOG.md) | What is in each version |
