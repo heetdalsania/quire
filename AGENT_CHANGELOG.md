@@ -41,7 +41,14 @@ production web build, both release bundles, and publishability checks. `npm audi
 successfully, and `git diff --check` passed. The first restricted-runner attempt timed out while
 server setup tried to bind loopback; the isolated lifecycle suite then passed all five tests with
 normal local process permissions before the complete gate was rerun successfully with those same
-permissions.
+permissions. GitHub CI run `33295025341` passed all six jobs: Node 22/24 on macOS and Ubuntu,
+the packed-release smoke test, and Docker. The rendered public repository showed all badges and
+the real demo asset without broken images, and GitHub reported 100% community-profile health.
+
+**Deferred maintenance:** Dependabot PRs #3 and #5 are green but combine major upgrades including
+Zod 3 to 4, Marked 15 to 18, Chokidar 4 to 5, TypeScript 5 to 7, and Vite 6 to 8. They were not
+merged into the already-audited beta; review those migrations separately after launch. The current
+dependency tree has zero known vulnerabilities.
 
 ## 2026-08-30 - Publish v0.1.0-beta.1
 
