@@ -17,6 +17,24 @@ actually verified, and what the next agent must not assume.
 
 ---
 
+## 2026-08-30 - Publish v0.1.0-beta.1
+
+**Agent:** OpenAI Codex
+
+**Outcome:** Published `quiredocs@0.1.0-beta.1` to npm and published the GitHub release as
+a prerelease. A clean project installed `quiredocs@beta` from the public registry; both
+`quire` and `quire-mcp` command shims worked and the installed CLI reported the expected
+version. The registry SHA-512 integrity matched the locally audited tarball.
+
+**Registry detail:** npm assigned both `beta` and `latest` to the first and only package
+version. Two owner-authenticated attempts to remove `latest`, using npm 11.11.0 and 11.16.0,
+were rejected by the registry with HTTP 400 after authentication completed. No package data
+was changed by those attempts. Installation guidance continues to name `quiredocs@beta`
+explicitly; a future stable release should deliberately move `latest` to the stable version.
+
+**Public references:** Git tag and GitHub prerelease `v0.1.0-beta.1`; npm package
+`quiredocs@0.1.0-beta.1`; release commit `435e7ed7ebb17efb88579cee14f6ba3696fdd811`.
+
 ## 2026-08-29 - Final public-beta security and package audit
 
 **Agent:** OpenAI Codex
