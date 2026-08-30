@@ -19,6 +19,7 @@ beforeEach(async () => {
   await writeFile(join(dir, "doc.md"), "original\n", "utf8");
   await writeFile(join(dir, "private.txt"), "private original\n", "utf8");
   await git("init", "-q", "-b", "main");
+  await git("config", "core.autocrlf", "false");
   await git("config", "user.email", "test@quire.local");
   await git("config", "user.name", "Quire Test");
   await git("add", "doc.md", "private.txt");

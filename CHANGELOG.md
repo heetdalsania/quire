@@ -13,6 +13,7 @@
 ### Reliability
 - Prevented a closed document connection from incorrectly marking the newly opened document offline.
 - Made disposable demo cleanup handle both interactive interrupts and automated termination.
+- Retried transient Windows file-lock failures without weakening atomic Markdown writes.
 
 ## 0.1.0-beta.2 - 2026-08-29
 

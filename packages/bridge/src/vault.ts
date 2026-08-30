@@ -58,6 +58,21 @@ const DEFAULTS = {
 
 const TMP_PREFIX = ".quire-tmp-";
 let tmpCounter = 0;
+const RENAME_RETRY_MS = [10, 25, 50, 100, 200];
+
+async function replaceFile(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const retryable = code === "EACCES" || code === "EBUSY" || code === "EPERM";
+      if (process.platform !== "win32" || !retryable || attempt >= RENAME_RETRY_MS.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RENAME_RETRY_MS[attempt]));
+    }
+  }
+}
 
 /**
  * Keeps a directory of Markdown files bidirectionally in sync with a set of Yjs documents.
@@ -312,7 +327,7 @@ export class Vault extends EventEmitter {
     try {
       // Atomic: readers never observe a half-written document.
       await writeFile(tmp, content, "utf8");
-      await rename(tmp, abs);
+      await replaceFile(tmp, abs);
     } catch (err) {
       await rm(tmp, { force: true }).catch(() => {});
       throw err;

@@ -105,6 +105,7 @@ describe("Phase 1 bridge spike -- acceptance", () => {
 
     await write("spec.md", "line one\nline two\nline three\n");
     await git("init", "-q", "-b", "main");
+    await git("config", "core.autocrlf", "false");
     await git("config", "user.email", "spike@quire.test");
     await git("config", "user.name", "Spike");
     await git("add", "spec.md");

@@ -48,8 +48,11 @@ describe("executable documents", () => {
   });
 
   it("runs in the vault directory", async () => {
-    const result = await runBlock("bash", "pwd", { ...base, enabled: true, cwd: dir });
-    expect(result.stdout).toContain(dir.replace("/private", ""));
+    await writeFile(join(dir, "vault-marker"), "present", "utf8");
+    const result = await runBlock("bash", "test -f vault-marker && printf contained", {
+      ...base, enabled: true, cwd: dir,
+    });
+    expect(result.stdout).toBe("contained");
   });
 
   it("reports a failing block rather than throwing", async () => {

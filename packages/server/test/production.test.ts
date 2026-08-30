@@ -173,12 +173,13 @@ describe("resources stay bounded", () => {
 
 describe("execution stays contained", () => {
   it("runs only in the vault directory", async () => {
+    await writeFile(join(dir, "vault-marker"), "present", "utf8");
     const res = await post("/api/exec", {
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ language: "bash", source: "pwd" }),
+      body: JSON.stringify({ language: "bash", source: "test -f vault-marker && printf contained" }),
     });
     const body = (await res.json()) as { result: { stdout: string } };
-    expect(body.result.stdout).toContain(dir.replace("/private", ""));
+    expect(body.result.stdout).toBe("contained");
   });
 
   it("refuses an interpreter it does not know", async () => {
