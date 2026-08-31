@@ -5,11 +5,13 @@
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](./LICENSE)
 
-**Google Docs for Markdown — where the files stay yours, and one of the collaborators is an agent.**
+**Local Markdown for humans and AI agents, with every edit visible, attributable, and reviewable.**
 
-Point Quire at a folder of Markdown. It becomes a live multiplayer workspace, and AI agents
-can join editing sessions as first-class collaborators with visible cursors and separately
-revertable edits. Your documents stay plain `.md` files on disk, in your git repo, owned by you.
+Point Quire at a folder of Markdown. The original `.md` files become a live multiplayer workspace,
+and AI agents can join the same editing sessions as first-class collaborators with visible cursors
+and separately revertable edits. There is no import step, cloud copy, or conversion round trip:
+your filesystem remains the source of truth, ready for git, vim, VS Code, and every other tool you
+already use.
 
 ![Quire: a person and an agent editing the same document at once](docs/demo.gif)
 
@@ -58,6 +60,28 @@ Plenty of tools do two of these. Quire is the one that does all three.
 The difference that matters: in Quire the agent is a peer in the *same CRDT session* you are typing
 in — visible cursor, attributed spans, separately revertable — rather than a batch process whose
 diff you read afterwards.
+
+### Not another Markdown import/export workflow
+
+[Google Docs can import and export Markdown](https://support.google.com/docs/answer/12014036?hl=en),
+and other cloud editors offer similar conversion workflows. That is useful when the cloud document
+is the workspace. Quire is for the opposite workflow: the files in your local folder stay
+authoritative while people, agents, external editors, and git can all work with them.
+
+| | Cloud Markdown import/export | **Quire** |
+|---|---|---|
+| Source of truth | A converted cloud document | The original local `.md` file |
+| File workflow | Import, collaborate, export | Edit in place with continuous filesystem sync |
+| External tools | Reconcile after export | Changes from editors and git merge into the live session |
+| AI collaboration | Assistant output inside a document | MCP agents with presence, attribution, policies, suggestions, and author-specific revert |
+| Account and hosting | Provider account and cloud service | No Quire account; localhost by default |
+
+Quire does not claim that every renderer interprets every Markdown extension identically. It does
+keep syntax-rich Markdown as source text, and the release suite checks a fixture containing YAML
+frontmatter, task lists, tables, fenced code, Mermaid, wiki-links, footnotes, raw HTML, and comments
+for byte-for-byte stability through an unchanged editing session. The same fixture changed by 22
+inserted and 30 deleted lines after an untouched Google Docs import/export round trip; see the
+[reproducible comparison](./docs/markdown-roundtrip.md), including what Google preserved.
 
 ## What works today
 
@@ -199,6 +223,7 @@ If Quire solves a problem you care about, starring the repository helps other pe
 | [SECURITY.md](./SECURITY.md) | Threat model and known limitations |
 | [RELEASING.md](./RELEASING.md) | How to build, verify and publish a release |
 | [CHANGELOG.md](./CHANGELOG.md) | What is in each version |
+| [docs/markdown-roundtrip.md](./docs/markdown-roundtrip.md) | Reproducible Quire and Google Docs Markdown fidelity comparison |
 | [tools/recorder](./tools/recorder) | Regenerates `docs/demo.gif` from the real app |
 
 ## Licence
