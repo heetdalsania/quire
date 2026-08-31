@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
@@ -8,6 +9,7 @@ import { CONTENT_KEY, Vault } from "../src/index.js";
 import { type Client, cleanup, connectClient, makeTempVaultDir, sleep, waitFor } from "./helpers.js";
 
 const exec = promisify(execFile);
+const fixturePath = fileURLToPath(new URL("./fixtures/markdown-roundtrip.md", import.meta.url));
 
 let dir: string;
 let vault: Vault;
@@ -26,6 +28,18 @@ afterEach(async () => {
 });
 
 describe("Phase 1 bridge spike -- acceptance", () => {
+  it("preserves syntax-rich Markdown byte-for-byte through an unchanged session", async () => {
+    const fixture = await readFile(fixturePath, "utf8");
+    await write("roundtrip.md", fixture);
+    vault = await Vault.open({ root: dir });
+
+    const handle = vault.getDoc("roundtrip.md");
+    expect(handle.getContent()).toBe(fixture);
+
+    await vault.flush();
+    expect(await read("roundtrip.md")).toBe(fixture);
+  });
+
   it("1. two clients editing concurrently converge, and disk matches", async () => {
     await write("notes.md", "# Title\n\nbody\n");
     vault = await Vault.open({ root: dir });

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Positioning and Markdown fidelity
+- Reframed Quire around its local, git-native source of truth and accountable AI-agent workflow
+  rather than a generic "Google Docs for Markdown" comparison.
+- Added an automated byte-fidelity test covering YAML frontmatter, task lists, tables, fenced code,
+  Mermaid, wiki-links, footnotes, raw HTML, comments, and escaped Markdown.
+- Documented the distinction between editing original `.md` files in place and cloud
+  import/collaborate/export workflows.
+- Published a reproducible Google Docs round-trip comparison using the same fixture, recording
+  both preserved semantics and source-level changes without overstating a single test.
+
 ## 0.1.0-beta.3 - 2026-08-30
 
 ### Onboarding and compatibility
