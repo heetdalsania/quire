@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.3 - 2026-08-30
 
 ### Positioning and Markdown fidelity
 - Reframed Quire around its local, git-native source of truth and accountable AI-agent workflow
@@ -11,8 +11,6 @@
   import/collaborate/export workflows.
 - Published a reproducible Google Docs round-trip comparison using the same fixture, recording
   both preserved semantics and source-level changes without overstating a single test.
-
-## 0.1.0-beta.3 - 2026-08-30
 
 ### Onboarding and compatibility
 - Added `quire --demo`, which creates a disposable three-document vault and removes it on exit.
