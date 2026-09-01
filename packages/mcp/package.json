@@ -24,7 +24,7 @@
     "ws": "^8.18.0",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.21",
-    "zod": "^3.24.1",
+    "zod": "^4.5.2",
     "@quire/server": "*"
   },
   "devDependencies": {
