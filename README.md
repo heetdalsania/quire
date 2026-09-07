@@ -215,6 +215,12 @@ Use the [issue tracker](https://github.com/heetdalsania/quire/issues) for reprod
 planned features, and read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
 If Quire solves a problem you care about, starring the repository helps other people find it.
 
+## Contact
+
+- General questions and feedback: [GitHub Discussions](https://github.com/heetdalsania/quire/discussions)
+- Bug reports: [GitHub Issues](https://github.com/heetdalsania/quire/issues)
+- Security vulnerabilities: [report privately](https://github.com/heetdalsania/quire/security/advisories/new)
+
 ## Documents
 
 | File | What's in it |
