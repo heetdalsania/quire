@@ -25,6 +25,7 @@ import {
   printDocument,
 } from "./export.js";
 import { applyLayout, getLayout, loadLayout, togglePanel, wireResizer } from "./layout.js";
+import { fileTree, matchingFiles, type FileNode } from "./files.js";
 import { closeMenu, heading, hint, menuItem, openMenu, row, segmented, slider } from "./menus.js";
 import { answerPeer, offerPeer, type PeerHandle } from "./peer.js";
 import { configureSuggesting, isSuggesting, setSuggesting, suggestingExtension } from "./suggesting.js";
@@ -149,33 +150,62 @@ function setStatus(text: string, live: boolean): void {
 
 // ---------------------------------------------------------------- sidebar
 
+const expandedFolders = new Set<string>();
+let searchGeneration = 0;
+
 function renderFiles(files: string[], hits?: Map<string, string>): void {
-  filesEl.replaceChildren(
-    ...files.map((path) => {
-      const button = document.createElement("button");
-      button.title = path;
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = path;
-      button.append(name);
-      if (hits?.has(path)) {
-        const hit = document.createElement("em");
-        hit.textContent = hits.get(path)!;
-        button.append(hit);
-      }
-      const drift = driftByPath.get(path);
-      if (drift && drift !== "current") {
-        const pill = document.createElement("span");
-        pill.className = "drift-pill";
-        pill.textContent = drift === "upstream-changed" ? "update" : drift === "diverged" ? "diverged" : "edited";
-        pill.title = "Installed from Discover; upstream has moved on";
-        name.append(pill);
-      }
-      if (path === current) button.setAttribute("aria-current", "true");
-      button.onclick = () => void open(path);
-      return button;
-    }),
-  );
+  const renderFile = (path: string, label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.title = path;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = label;
+    button.append(name);
+    if (hits?.has(path)) {
+      const hit = document.createElement("em");
+      hit.textContent = hits.get(path)!;
+      button.append(hit);
+    }
+    const drift = driftByPath.get(path);
+    if (drift && drift !== "current") {
+      const pill = document.createElement("span");
+      pill.className = "drift-pill";
+      pill.textContent = drift === "upstream-changed" ? "update" : drift === "diverged" ? "diverged" : "edited";
+      pill.title = "Installed from Discover; upstream has moved on";
+      name.append(pill);
+    }
+    if (path === current) button.setAttribute("aria-current", "true");
+    button.onclick = () => void open(path);
+    return button;
+  };
+  const renderNode = (node: FileNode): HTMLElement => {
+    if (!node.children) return renderFile(node.path, node.name);
+    const folder = document.createElement("details");
+    folder.className = "file-folder";
+    folder.open = expandedFolders.has(node.path);
+    const summary = document.createElement("summary");
+    summary.textContent = node.name;
+    summary.title = node.path;
+    const children = document.createElement("div");
+    children.className = "folder-children";
+    children.append(...node.children.map(renderNode));
+    folder.append(summary, children);
+    folder.ontoggle = () => {
+      if (!folder.isConnected) return;
+      if (folder.open) expandedFolders.add(node.path);
+      else expandedFolders.delete(node.path);
+    };
+    return folder;
+  };
+  filesEl.replaceChildren(...(hits
+    ? files.map((path) => renderFile(path, path))
+    : fileTree(files).map(renderNode)));
+  if (!files.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = hits ? "No matching documents." : "No Markdown files.";
+    filesEl.append(empty);
+  }
 }
 
 function renderBacklinks(): void {
@@ -194,18 +224,27 @@ function renderBacklinks(): void {
 }
 
 let searchTimer: number | undefined;
+async function refreshFileSearch(): Promise<void> {
+  const generation = ++searchGeneration;
+  const q = searchEl.value.trim();
+  if (!q) return renderFiles(allFiles);
+  // Filename results do not depend on full-text search succeeding or returning quickly.
+  renderFiles(matchingFiles(allFiles, q, []), new Map());
+  const { results } = await api<{ results: Array<{ path: string; line: number; text: string }> }>(
+    `/api/search?q=${encodeURIComponent(q)}`,
+  ).catch(() => ({ results: [] }));
+  if (generation !== searchGeneration || q !== searchEl.value.trim() || mode !== "vault") return;
+  const hits = new Map<string, string>();
+  for (const r of results) if (!hits.has(r.path)) hits.set(r.path, r.text.trim().slice(0, 80));
+  renderFiles(matchingFiles(allFiles, q, [...hits.keys()]), hits);
+}
+
 searchEl.oninput = () => {
+  searchGeneration++;
   window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(async () => {
+  searchTimer = window.setTimeout(() => {
     if (mode === "discover") return paintGallery();
-    const q = searchEl.value.trim();
-    if (!q) return renderFiles(allFiles);
-    const { results } = await api<{ results: Array<{ path: string; line: number; text: string }> }>(
-      `/api/search?q=${encodeURIComponent(q)}`,
-    ).catch(() => ({ results: [] as Array<{ path: string; line: number; text: string }> }));
-    const hits = new Map<string, string>();
-    for (const r of results) if (!hits.has(r.path)) hits.set(r.path, r.text.trim().slice(0, 80));
-    renderFiles([...hits.keys()], hits);
+    void refreshFileSearch();
   }, 160);
 };
 
@@ -399,6 +438,7 @@ async function installEntry(entry: RegistryEntry): Promise<void> {
 }
 
 function setMode(next: "vault" | "discover"): void {
+  searchGeneration++;
   mode = next;
   document.body.classList.toggle("discovering", next === "discover");
   discoverEl.hidden = next !== "discover";
@@ -408,7 +448,10 @@ function setMode(next: "vault" | "discover"): void {
   modeVaultBtn.setAttribute("aria-selected", String(next === "vault"));
   modeDiscoverBtn.setAttribute("aria-selected", String(next === "discover"));
   searchEl.placeholder = next === "discover" ? "Search Discover" : "Search the vault";
-  if (next === "discover") paintGallery();
+  if (next === "discover") {
+    paintGallery();
+    setCompactPanel("document");
+  } else void refreshFileSearch();
 }
 
 modeVaultBtn.onclick = () => setMode("vault");
@@ -717,7 +760,11 @@ function renderRail(): void {
         if (t.range) {
           const go = document.createElement("button");
           go.textContent = "Show";
-          go.onclick = () => scrollTo(view!, t.range!.from, t.range!.to);
+          go.onclick = () => {
+            compactPreview = false;
+            showCompactDocument();
+            scrollTo(view!, t.range!.from, t.range!.to);
+          };
           actions.append(go);
         }
         // Assigning a thread to an agent is what closes the loop between review and work:
@@ -844,6 +891,9 @@ async function paintPreview(): Promise<void> {
 }
 
 async function open(path: string): Promise<void> {
+  showCompactDocument();
+  const parts = path.split("/");
+  for (let i = 1; i < parts.length; i++) expandedFolders.add(parts.slice(0, i).join("/"));
   view?.destroy();
   provider?.destroy();
   void persistence?.destroy();
@@ -911,7 +961,7 @@ async function open(path: string): Promise<void> {
   await paintPreview();
   renderPresence();
   renderRail();
-  renderFiles(allFiles);
+  void refreshFileSearch();
   renderBacklinks();
 }
 
@@ -972,6 +1022,8 @@ function openComposer(from: number, to: number): void {
   };
 
   commentsEl.prepend(card);
+  if (compactMedia.matches) setCompactPanel("rail");
+  else if (!getLayout().railOpen) togglePanel("rail");
   field.focus();
 }
 
@@ -1279,6 +1331,8 @@ window.addEventListener("keydown", (event) => {
   const mod = event.metaKey || event.ctrlKey;
   if (mod && event.key.toLowerCase() === "k") {
     event.preventDefault();
+    if (compactMedia.matches) setCompactPanel("sidebar");
+    else if (!getLayout().sidebarOpen) togglePanel("sidebar");
     searchEl.focus();
     searchEl.select();
   } else if (mod && event.shiftKey && event.key.toLowerCase() === "s") {
@@ -1297,6 +1351,8 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     attrBtn.click();
   } else if (event.key === "Escape" && document.activeElement === searchEl) {
+    searchGeneration++;
+    window.clearTimeout(searchTimer);
     searchEl.value = "";
     renderFiles(allFiles);
     view?.focus();
@@ -1314,6 +1370,49 @@ suggestBtn.setAttribute("aria-pressed", "false");
 // Panels: restore the saved arrangement, then make the dividers draggable.
 loadLayout();
 applyLayout();
+const compactMedia = window.matchMedia("(max-width: 1180px)");
+let compactPanel: "sidebar" | "document" | "rail" = "document";
+let compactPreview = false;
+
+function setCompactPanel(panel: typeof compactPanel): void {
+  compactPanel = panel;
+  document.body.dataset.compactPanel = panel;
+  document.body.classList.toggle("compact-preview", compactPreview);
+  for (const button of document.querySelectorAll<HTMLButtonElement>("#compact-nav button")) {
+    const selected = button.dataset.panel === panel &&
+      (panel !== "document" || (button.dataset.view === "preview") === compactPreview);
+    button.setAttribute("aria-pressed", String(selected));
+  }
+  closeMenu();
+  view?.requestMeasure();
+}
+
+function showCompactDocument(): void {
+  if (compactMedia.matches) setCompactPanel("document");
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("#compact-nav button")) {
+  button.onclick = () => {
+    const panel = button.dataset.panel as typeof compactPanel;
+    if (panel === "document") {
+      compactPreview = button.dataset.view === "preview";
+      setMode("vault");
+    }
+    setCompactPanel(panel);
+  };
+}
+compactMedia.addEventListener("change", () => { closeMenu(); view?.requestMeasure(); });
+setCompactPanel("document");
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("#document-views button")) {
+  button.onclick = () => {
+    const next = button.dataset.view!;
+    if (!getLayout().editorOpen && next !== "preview") togglePanel("editor");
+    document.body.dataset.documentView = next;
+    for (const sibling of button.parentElement!.children) sibling.setAttribute("aria-pressed", String(sibling === button));
+    view?.requestMeasure();
+  };
+}
 // Each panel closes itself; a stub at the edge brings it back.
 for (const [selector, panel] of [
   ["#close-sidebar", "sidebar"],
@@ -1406,7 +1505,7 @@ async function boot(): Promise<void> {
   void api<{ documents: Array<{ path: string; state: string }> }>("/api/drift")
     .then(({ documents }) => {
       for (const d of documents) driftByPath.set(d.path, d.state);
-      if (documents.some((d) => d.state !== "current")) renderFiles(allFiles);
+      if (mode === "vault" && documents.some((d) => d.state !== "current")) void refreshFileSearch();
     })
     .catch(() => {});
   modeDiscoverBtn.hidden = !registry.available;
@@ -1432,7 +1531,7 @@ async function boot(): Promise<void> {
     if (!changed) return;
     allFiles = data.files;
     if (mode === "discover") paintGallery();
-    else if (!searchEl.value.trim()) renderFiles(allFiles);
+    else void refreshFileSearch();
     void refreshLinks().catch(() => {});
   };
 

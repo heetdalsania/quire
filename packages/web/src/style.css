@@ -72,6 +72,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -492,16 +493,6 @@ button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transp
 
 /* ── responsive ──────────────────────────────────────────────────────── */
 
-@media (max-width: 1180px) {
-  body { --rail-w: 0px; --rail-rz: 0px; }
-  #rail, #rz-rail { display: none; }
-}
-@media (max-width: 820px) {
-  body { --sidebar-w: 0px; --sidebar-rz: 0px; --rail-w: 0px; --rail-rz: 0px; }
-  #sidebar, #rz-sidebar, #rail, #rz-rail, #rz-editor { display: none; }
-  #split { grid-template-columns: minmax(0, 1fr) 0 0; }
-  #preview { display: none; }
-}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
@@ -935,4 +926,80 @@ body.commenting #editor { opacity: 0.92; }
 .theme-swatch .label {
   font-size: 11.5px; font-weight: 550; letter-spacing: -0.005em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Folder disclosure uses native keyboard and screen-reader behavior. */
+#files .name, #files em { max-width: 100%; }
+.file-folder summary {
+  padding: 6px 10px; border-radius: var(--r-sm);
+  cursor: pointer; overflow-wrap: anywhere; font-size: 13.5px;
+}
+.file-folder summary:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.file-folder summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.folder-children { margin-left: 12px; padding-left: 3px; border-left: 1px solid var(--rule); }
+.file-folder:not([open]) > .folder-children { display: none; }
+
+#compact-nav { display: none; }
+#document-views { display: flex; flex: none; gap: 2px; }
+#document-views button, #compact-nav button {
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--subtle);
+  padding: 5px 8px; font-size: 12px; letter-spacing: 0;
+}
+#document-views button[aria-pressed="true"], #compact-nav button[aria-pressed="true"] {
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm);
+}
+@media screen and (min-width: 1181px) {
+  body[data-document-view="edit"] #split, body[data-document-view="preview"] #split { grid-template-columns: minmax(0, 1fr); }
+  body[data-document-view="edit"] #preview,
+  body[data-document-view="preview"] #editor,
+  body[data-document-view="edit"] #rz-editor,
+  body[data-document-view="preview"] #rz-editor,
+  body[data-document-view="preview"] #editor-stub { display: none; }
+  body[data-document-view="preview"] #preview { grid-column: 1; }
+  body.focus-mode main { grid-column: 1; }
+  body.focus-mode #preview { display: block; grid-column: 1; }
+}
+
+@media screen and (max-width: 1180px) {
+  body {
+    height: 100vh; height: 100dvh; overflow: hidden;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  }
+  #compact-nav {
+    display: grid; grid-column: 1; grid-row: 1;
+    grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px;
+    padding: 4px max(6px, env(safe-area-inset-right)) 4px max(6px, env(safe-area-inset-left));
+    background: var(--overlay); border-bottom: 1px solid var(--rule);
+  }
+  #compact-nav button { min-height: 44px; font-size: 13px; padding: 6px 4px; }
+  body .stub, body .resizer, body .panel-close, #document-views { display: none !important; }
+  body #sidebar, body #rail, body main, body #discover {
+    display: none; grid-column: 1; grid-row: 2; min-width: 0; min-height: 0;
+  }
+  body[data-compact-panel="sidebar"] #sidebar { display: flex; }
+  body[data-compact-panel="rail"] #rail { display: block; overflow-y: auto; }
+  body[data-compact-panel="document"]:not(.discovering) main { display: flex; }
+  body[data-compact-panel="document"].discovering #discover { display: block; padding: 20px 16px 60px; }
+  body #split { display: flex; min-width: 0; overflow: hidden; }
+  body #split #editor { display: block; width: 100%; min-width: 0; }
+  body #split #preview { display: none; width: 100%; min-width: 0; }
+  body.compact-preview #split #editor { display: none; }
+  body.compact-preview #split #preview { display: block; padding: 24px 20px 60px; overflow-wrap: anywhere; }
+  #topbar { flex-wrap: wrap; gap: 4px; padding: 6px 8px; }
+  #docpath { flex: 1 1 65%; min-width: 0; }
+  #presence { order: 1; max-width: 30%; overflow: hidden; }
+  .toolgroup { order: 2; width: 100%; overflow-x: auto; flex: auto; }
+  .tool { justify-content: center; min-width: 44px; min-height: 44px; flex: none; }
+  #search, .composer textarea { font-size: 16px; }
+  #editor .cm-editor { font-size: max(16px, var(--editor-size, 16px)); }
+  #files button, .file-folder summary { min-height: 44px; justify-content: center; }
+  .actions { flex-wrap: wrap; }
+  .actions button { min-height: 44px; }
+  .file-folder summary { padding-top: 10px; padding-bottom: 10px; }
+  .folder-children { margin-left: 8px; }
+  #gallery { grid-template-columns: repeat(auto-fill, minmax(min(292px, 100%), 1fr)); }
+  .popover { max-width: calc(100vw - 24px); max-height: calc(100dvh - 190px); overflow-y: auto; }
+  #review-banner { flex-wrap: wrap; }
+  #review-banner > div { min-width: 0; overflow-wrap: anywhere; }
+  #replay-label { min-width: 0; overflow-wrap: anywhere; }
 }
