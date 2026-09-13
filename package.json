@@ -21,10 +21,10 @@
     "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
-    "@types/node": "^22.10.2",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.2",
     "esbuild": "^0.28.2",
-    "typescript": "^5.7.2",
-    "vitest": "^4.1.11"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   }
 }
