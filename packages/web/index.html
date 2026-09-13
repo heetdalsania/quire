@@ -13,6 +13,12 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <nav id="compact-nav" aria-label="Workspace views">
+      <button data-panel="sidebar" aria-pressed="false">Files</button>
+      <button data-panel="document" data-view="edit" aria-pressed="true">Edit</button>
+      <button data-panel="document" data-view="preview" aria-pressed="false">Preview</button>
+      <button data-panel="rail" aria-pressed="false">Comments</button>
+    </nav>
     <button id="sidebar-stub" class="stub" aria-label="Show the sidebar" title="Show sidebar (Cmd+\)">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
     </button>
@@ -42,7 +48,7 @@
         <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" />
         </svg>
-        <input id="search" type="search" placeholder="Search the vault" autocomplete="off" spellcheck="false" />
+        <input id="search" type="search" aria-label="Search files and contents" placeholder="Search the vault" autocomplete="off" spellcheck="false" />
       </div>
 
       <nav id="files" aria-label="Documents"></nav>
@@ -75,6 +81,11 @@
 
       <div id="topbar">
         <span id="docpath"></span>
+        <div id="document-views" role="group" aria-label="Document view">
+          <button data-view="edit" aria-pressed="false">Edit</button>
+          <button data-view="split" aria-pressed="true">Split</button>
+          <button data-view="preview" aria-pressed="false">Preview</button>
+        </div>
         <div class="toolgroup">
           <button id="comment-btn" class="tool" aria-label="Comment on selection" disabled title="Comment on the selected text">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /></svg>

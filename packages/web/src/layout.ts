@@ -69,6 +69,13 @@ export function applyLayout(): void {
 export function togglePanel(which: "sidebar" | "rail" | "editor"): boolean {
   const key = `${which}Open` as "sidebarOpen" | "railOpen" | "editorOpen";
   layout = { ...layout, [key]: !layout[key] };
+  if (which === "editor") {
+    const mode = layout.editorOpen ? "split" : "preview";
+    document.body.dataset.documentView = mode;
+    for (const button of document.querySelectorAll<HTMLButtonElement>("#document-views button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.view === mode));
+    }
+  }
   applyLayout();
   persist();
   return layout[key];

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0-beta.4 - 2026-09-12
+
+### Navigation and mobile editing
+- Added touch-sized Files, Edit, Preview, and Comments views on phones and tablets. Switching
+  views keeps the current editing session, selection, and document intact.
+- Added desktop Edit/Split/Preview controls so either document pane can use the full width.
+- Replaced the flat vault list with nested, collapsible folders and readable filenames.
+  Opening a document reveals its parent folders; folder expansion is retained during the session.
+- Search now matches filenames and folder paths as well as contents, and ignores outdated search
+  responses after a query changes or clears.
+- Kept comments, toolbar actions, and navigation accessible with saved desktop layout preferences,
+  and respected hidden controls for unavailable features and restricted share links.
+- Made the WebRTC send buffer explicitly ArrayBuffer-backed for current browser type definitions.
+- Added browser regression coverage for navigation, mobile editing and persistence, touch comments,
+  viewport changes, stale searches, and desktop pane controls in Chromium, Firefox, and WebKit.
+
+Thanks to [@Hamsterarsch](https://github.com/Hamsterarsch) for the workshop use case and reports
+[#10](https://github.com/heetdalsania/quire/issues/10) and
+[#11](https://github.com/heetdalsania/quire/issues/11).
+
+### Dependencies
+- Updated the MCP dependency tree's `fast-uri`, `hono`, and `qs` to compatible patched versions
+  addressing the advisories reported by the release audit.
+
 ## 0.1.0-beta.3 - 2026-08-30
 
 ### Positioning and Markdown fidelity

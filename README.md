@@ -45,6 +45,17 @@ Not ready to point it at your own files? Start a sample vault that is deleted wh
 npx quiredocs --demo
 ```
 
+### Files and smaller screens
+
+The vault sidebar groups documents into collapsible folders. Search matches filenames, folder
+paths, and document contents. On phones and tablets, use **Files**, **Edit**, **Preview**, and
+**Comments** to switch between full-width views without losing your place. Desktop windows also
+have **Edit / Split / Preview** controls.
+
+A phone connects to the computer running Quire; `localhost` on the phone refers to the phone
+itself. Before making a vault reachable by workshop attendees, read the
+[network access limitations](./SECURITY.md#exposing-a-vault-beyond-your-machine).
+
 ## Where it sits
 
 Plenty of tools do two of these. Quire is the one that does all three.
