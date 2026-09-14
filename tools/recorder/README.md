@@ -5,24 +5,25 @@ types in the editor while a real `AgentSession` edits the same CRDT document. Th
 also exercises suggestions, comments, authorship, provenance and policy, export, sharing, and
 display controls.
 
-Requires Google Chrome (used via `puppeteer-core`, so nothing is downloaded).
+Requires Google Chrome (used via `puppeteer-core`, so no browser is downloaded).
+`demo.mjs` creates the sample files in a temporary vault, starts a loopback-only server,
+runs the recorder, then stops the server and removes the vault.
 
 ```bash
-# 1. Build and serve a disposable vault with history enabled
+# 1. Build the application
 npm run build
-node packages/cli/bin/quire.js /tmp/quire-demo-vault --port 4430 --history
 
 # 2. Install recorder-only dependencies without changing the root package
 cd tools/recorder
 npm install --no-save --package-lock=false --ignore-scripts puppeteer-core gifenc pngjs
 
 # 3. Record and encode
-QUIRE_URL=http://127.0.0.1:4430 node record.mjs
+node demo.mjs
 SCALE=1.5 COLORS=64 OUT=../../docs/demo.gif node encode.mjs
 
 # 4. Regenerate launch media from the captured real-app frames
 SCALE=1.5 COLORS=48 STEP=2 OUT=../../docs/demo.gif node encode.mjs
-START=0 END=205 SCALE=1.8 COLORS=48 STEP=2 OUT=../../docs/demo-short.gif node encode.mjs
+START=0 END=170 SCALE=1.5 COLORS=48 STEP=2 OUT=../../docs/demo-short.gif node encode.mjs
 node render-assets.mjs
 ```
 

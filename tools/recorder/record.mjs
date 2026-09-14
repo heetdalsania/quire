@@ -92,6 +92,18 @@ async function toggleToolbarMenu(id, pause = 1500) {
 // ---- choreography --------------------------------------------------------
 await sleep(1200);
 
+// Show the current folder navigation before the collaborative edit.
+await page.click('#files summary[title="Workshop"]');
+await sleep(900);
+await page.evaluate(() => {
+  [...document.querySelectorAll('#files button')].find((button) => button.textContent === 'agenda.md')?.click();
+});
+await sleep(1200);
+await page.evaluate(() => {
+  [...document.querySelectorAll('#files button')].find((button) => button.textContent === 'spec.md')?.click();
+});
+await sleep(700);
+
 // 1. A person is writing.
 await placeCursorAfter("only component permitted to move money.");
 await humanType(" Nothing else touches the ledger.");

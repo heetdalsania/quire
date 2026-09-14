@@ -7,7 +7,7 @@
     "quire": "dist/quire.js",
     "quire-mcp": "dist/quire-mcp.js"
   },
-  "description": "Google Docs for Markdown - real-time collaborative editing over plain .md files, with AI agents as live collaborators.",
+  "description": "Local-first Markdown collaboration for humans and AI agents, with live attribution, suggestions, and Git-friendly plain files.",
   "files": [
     "dist/",
     "web/",

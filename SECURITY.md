@@ -5,7 +5,8 @@
 Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its own origin.
 
 - **No telemetry, no analytics, no phone-home.** Quire never reports on you.
-- **Core editing makes no outbound requests.** Discover has three user-triggered requests:
+- **Core text collaboration makes no outbound requests.** Images referenced in Markdown may
+  be fetched by your browser when you open the preview. Discover has three user-triggered requests:
   fetching a document from `raw.githubusercontent.com`, searching repositories via
   `api.github.com`, and listing a repository's Markdown files. Install URLs are derived from the registry index rather than from the caller and the
   host is pinned, so the endpoint cannot be turned into a general-purpose fetcher for your
@@ -28,6 +29,10 @@ Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its
 - **Document paths are validated twice** — at the transport, and again in `Vault.getDoc`, which is
   the boundary that actually writes files and so refuses rather than trusting its caller.
 - **Writes are atomic** (temp file + rename), so a reader never sees a half-written document.
+- **Markdown previews are sanitized.** DOMPurify removes scripts, event handlers, unsafe URLs,
+  embedded frames and document-supplied styles before HTML enters the page. Mermaid uses its
+  strict security mode. HTML exports and rich-text copies use this rendered preview; original
+  Markdown files and Markdown exports remain unchanged and may still contain untrusted HTML.
 - **Git snapshots are opt-in.** `--git` commits only Markdown paths Quire changed. It does not
   include unrelated working-tree or staged changes, and it never pushes or changes remotes.
 

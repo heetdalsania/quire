@@ -103,7 +103,7 @@ export class SyncProvider {
   }
 
   private send(payload: Uint8Array): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(payload);
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(new Uint8Array(payload));
   }
 
   destroy(): void {

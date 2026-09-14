@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import type { Mermaid } from "mermaid";
 
 /**
@@ -58,7 +59,11 @@ export async function renderPreview(
   options: { resolveLink: (t: string) => string | null; onNavigate: (path: string) => void },
 ): Promise<void> {
   const html = marked.parse(linkifyWikiLinks(source, options.resolveLink), { async: false });
-  target.innerHTML = html;
+  target.innerHTML = DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["style", "form", "iframe", "object", "embed"],
+    FORBID_ATTR: ["style"],
+  });
 
   for (const anchor of target.querySelectorAll<HTMLAnchorElement>("a.wikilink")) {
     anchor.onclick = (event) => {
