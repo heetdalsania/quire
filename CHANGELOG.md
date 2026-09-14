@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.1.0-beta.4 - 2026-09-12
+## 0.1.0-beta.4 - 2026-09-13
+
+### Security and compatibility
+- Sanitize Markdown previews with DOMPurify to remove active HTML, unsafe links, and injected
+  styles. Original Markdown stays unchanged; rendered HTML exports use the sanitized preview.
+- Added real MCP transport tests for tool schemas, invalid arguments, edits, and suggestions.
+- Added frontend and browser-test typechecking to the release gate and CI, and corrected a
+  WebSocket buffer type mismatch exposed by current browser definitions.
+- Added browser regressions for unsafe HTML, tables, task lists, wiki links, valid Mermaid,
+  and malformed diagrams across Chromium, Firefox, and WebKit.
+- Updated production dependencies and the TypeScript, Vite, Vitest, and Playwright toolchain.
+  Source builds now require Node.js 22.12 or newer; the packaged CLI still supports Node.js 22+.
+- Refreshed the real-app demo and added a disposable-vault recorder entry point.
 
 ### Navigation and mobile editing
 - Added touch-sized Files, Edit, Preview, and Comments views on phones and tablets. Switching

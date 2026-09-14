@@ -10,7 +10,8 @@ platform, so explain how a large proposal strengthens that focus.
 
 ## Before you start
 
-- Use Node.js 22 or newer and the npm version bundled with it.
+- Use Node.js 22.12 or newer and the npm version bundled with it. Building from source requires
+  this newer minor version for Vite; the published CLI still supports Node.js 22 or newer.
 - Search existing issues and discussions before opening a duplicate.
 - Keep pull requests focused. Separate unrelated refactors from behavior changes.
 - Never include private vault contents, credentials, or `.quire/state/` data in fixtures or reports.

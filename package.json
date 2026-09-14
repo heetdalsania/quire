@@ -7,24 +7,24 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "tsc --build && npm run build -w @quire/web",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
-    "typecheck": "tsc --build --pretty",
+    "typecheck": "tsc --build --pretty && tsc --project tsconfig.web.json",
     "verify": "npm run typecheck && npm test && npm run build:release && npm run check:release",
     "start": "node packages/cli/bin/quire.js",
     "build:release": "npm run build && node scripts/build-release.mjs",
     "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
-    "@types/node": "^22.10.2",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.2",
     "esbuild": "^0.28.2",
-    "typescript": "^5.7.2",
-    "vitest": "^4.1.11"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   }
 }
