@@ -5,6 +5,8 @@
 - Serialize filesystem reads and writes per document so delayed watcher snapshots cannot
   replay older saved text over newer edits or undo/redo. Preserve unsaved local edits beside
   suggestions when the disk projection is unchanged; add deterministic race regressions.
+- Wait for timed-out executable process trees to terminate before returning, preventing their
+  working directories from remaining locked during cleanup on Windows.
 - Use the collaborative history manager consistently for undo/redo, preventing local history
   from treating incoming document content and peer edits as the current user's typing.
 - Add local agent setup for Claude Code, Codex and Cursor, including native Windows configuration,
