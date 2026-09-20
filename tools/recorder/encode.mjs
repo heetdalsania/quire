@@ -4,7 +4,7 @@ import gifenc from "gifenc";
 const { GIFEncoder, applyPalette, quantize } = gifenc;
 import { PNG } from "pngjs";
 
-const dir = join(import.meta.dirname, "frames");
+const dir = process.env.FRAMES ?? join(import.meta.dirname, "frames");
 const meta = JSON.parse(await readFile(join(dir, "meta.json"), "utf8"));
 const allFiles = (await readdir(dir)).filter((f) => f.endsWith(".png")).sort();
 

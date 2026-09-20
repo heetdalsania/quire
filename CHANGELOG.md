@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Use the collaborative history manager consistently for undo/redo, preventing local history
+  from treating incoming document content and peer edits as the current user's typing.
+- Add local agent setup for Claude Code, Codex and Cursor, including native Windows configuration,
+  the active server port, a review-only sample task and live document-specific agent presence.
+  Shared links cannot generate full-vault setup commands. No model calls or command execution.
+- Add an experimental Simplified Chinese translation for core navigation, review controls and
+  agent setup, with persistent language selection, English fallback and a Chinese quickstart.
+  Switching language preserves the current document and editing session.
+- Update Zod to 4.6.5. Keep Node typings aligned with Node 22; separate major Dependabot upgrades
+  from routine minor/patch groups. Mermaid 12 remains deferred for dedicated compatibility review.
+- Add tests for setup URL validation, platform configuration, presence, localization and
+  Unicode suggestions, plus a reproducible recorder for focused collaboration demos.
+
 ## 0.1.0-beta.4 - 2026-09-13
 
 ### Security and compatibility

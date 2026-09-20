@@ -1,8 +1,10 @@
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap } from "@codemirror/commands";
+import { getLocale, initLocale, setLocale, t, t as translate, type Locale } from "./i18n.js";
+import { wireAgentSetup } from "./agent-setup.js";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { yCollab } from "y-codemirror.next";
+import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { quireEditorTheme, quireHighlight } from "./theme.js";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
@@ -135,6 +137,14 @@ async function purgeStaleOfflineStores(): Promise<void> {
 }
 
 let offline = false;
+let statusKey = "connecting";
+const agentSetup = wireAgentSetup($<HTMLButtonElement>("#connect-agent"), () => ({
+  path: current,
+  connected: statusKey === "live",
+  agents: [...(provider?.awareness.getStates().values() ?? [])]
+    .filter((state) => state.user?.kind === "agent")
+    .map((state) => String(state.user.name)),
+}));
 
 /** Fetch JSON, surfacing server trouble in the status pill instead of throwing into the void. */
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -144,8 +154,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function setStatus(text: string, live: boolean): void {
-  statusTextEl.textContent = text;
+  statusKey = text;
+  statusTextEl.textContent = t(text);
   statusEl.classList.toggle("live", live);
+  agentSetup.refresh();
 }
 
 // ---------------------------------------------------------------- sidebar
@@ -203,7 +215,7 @@ function renderFiles(files: string[], hits?: Map<string, string>): void {
   if (!files.length) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
-    empty.textContent = hits ? "No matching documents." : "No Markdown files.";
+    empty.textContent = t(hits ? "No matching documents." : "No Markdown files.");
     filesEl.append(empty);
   }
 }
@@ -643,6 +655,7 @@ function syncAuthors(): void {
 
 function renderPresence(): void {
   if (!provider) return;
+  agentSetup.refresh();
   syncAuthors();
   const seen = new Map<number, { name: string; color: string; kind?: string }>();
   for (const [clientId, state] of provider.awareness.getStates()) {
@@ -680,8 +693,10 @@ function renderRail(): void {
   sugCount.textContent = String(suggestions.length);
   sugCount.classList.toggle("hot", suggestions.length > 0);
   if (suggestions.length === 0) {
-    suggestionsEl.innerHTML =
-      '<p class="empty-note">Nothing awaiting review. Agent edits made with <code>suggest</code> appear here before they reach the file.</p>';
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = t("Nothing awaiting review.");
+    suggestionsEl.replaceChildren(empty);
   } else {
     suggestionsEl.replaceChildren(
       ...suggestions.map((s) => {
@@ -690,11 +705,11 @@ function renderRail(): void {
         card.style.setProperty("--who", s.color);
         const who = document.createElement("div");
         who.className = "who";
-        who.append(document.createTextNode(`${s.authorName} proposes`));
+        who.append(document.createTextNode(`${s.authorName} ${t("proposes")}`));
         if (s.authorId && authorRegistry.get(s.authorId)?.kind === "agent") {
           const chip = document.createElement("span");
           chip.className = "chip";
-          chip.textContent = "agent";
+          chip.textContent = t("agent");
           who.append(chip);
         }
         card.append(who);
@@ -711,11 +726,11 @@ function renderRail(): void {
         const actions = document.createElement("div");
         actions.className = "actions";
         const accept = document.createElement("button");
-        accept.textContent = "Accept";
+        accept.textContent = t("Accept");
         accept.className = "primary";
         accept.onclick = () => { acceptSuggestion(ytext!, s.id); renderRail(); };
         const reject = document.createElement("button");
-        reject.textContent = "Reject";
+        reject.textContent = t("Reject");
         reject.onclick = () => { rejectSuggestion(ytext!, s.id); renderRail(); };
         actions.append(accept, reject);
         card.append(actions);
@@ -727,7 +742,10 @@ function renderRail(): void {
   const threads = comments?.list() ?? [];
   cmtCount.textContent = String(threads.length);
   if (threads.length === 0) {
-    commentsEl.innerHTML = '<p class="empty-note">No comments yet. Select some text and press Comment.</p>';
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = t("No comments yet.");
+    commentsEl.replaceChildren(empty);
   } else {
     commentsEl.replaceChildren(
       ...threads.map((t) => {
@@ -759,7 +777,7 @@ function renderRail(): void {
         actions.className = "actions";
         if (t.range) {
           const go = document.createElement("button");
-          go.textContent = "Show";
+          go.textContent = translate("Show");
           go.onclick = () => {
             compactPreview = false;
             showCompactDocument();
@@ -770,7 +788,7 @@ function renderRail(): void {
         // Assigning a thread to an agent is what closes the loop between review and work:
         // today that round trip means copying context into a chat window by hand.
         const assign = document.createElement("button");
-        assign.textContent = t.assignedTo ? "Unassign" : "Assign";
+        assign.textContent = translate(t.assignedTo ? "Unassign" : "Assign");
         assign.title = t.assignedTo
           ? `Assigned to ${t.assignedTo}`
           : "Hand this thread to an agent, which will answer with a suggestion";
@@ -785,10 +803,10 @@ function renderRail(): void {
         actions.append(assign);
 
         const resolve = document.createElement("button");
-        resolve.textContent = t.resolved ? "Reopen" : "Resolve";
+        resolve.textContent = translate(t.resolved ? "Reopen" : "Resolve");
         resolve.onclick = () => { comments!.setResolved(t.id, !t.resolved); renderRail(); };
         const del = document.createElement("button");
-        del.textContent = "Delete";
+        del.textContent = translate("Delete");
         del.onclick = () => { comments!.remove(t.id); renderRail(); };
         actions.append(resolve, del);
         card.append(actions);
@@ -805,7 +823,7 @@ function renderRail(): void {
     ...agents.map(({ id, meta }) => {
       const button = document.createElement("button");
       button.className = "revert";
-      button.textContent = `Revert ${meta!.name}'s edits`;
+      button.textContent = getLocale() === "en" ? `Revert ${meta!.name}'s edits` : `${t("Revert edits")}: ${meta!.name}`;
       button.title = "Removes only this agent's spans, leaving everyone else's text alone";
       button.onclick = () => {
         const removed = revertAuthor(ytext!, id);
@@ -930,8 +948,9 @@ async function open(path: string): Promise<void> {
     state: EditorState.create({
       extensions: [
         lineNumbers(),
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // One history owner for keyboard and native beforeinput undo/redo. The local
+        // CodeMirror history would also record incoming document/peer changes.
+        keymap.of([...yUndoManagerKeymap, ...defaultKeymap]),
         markdown(),
         quireEditorTheme,
         quireHighlight,
@@ -1328,6 +1347,7 @@ snapshotBtn.onclick = async () => {
 
 // Cmd/Ctrl+K focuses search, Cmd/Ctrl+Shift+A toggles authorship, Escape leaves search.
 window.addEventListener("keydown", (event) => {
+  if (document.querySelector("#agent-setup[open]")) return;
   const mod = event.metaKey || event.ctrlKey;
   if (mod && event.key.toLowerCase() === "k") {
     event.preventDefault();
@@ -1360,6 +1380,16 @@ window.addEventListener("keydown", (event) => {
 });
 
 applySettings(display);
+initLocale();
+const languageSelect = $<HTMLSelectElement>("#interface-language");
+languageSelect.value = getLocale();
+languageSelect.onchange = () => setLocale(languageSelect.value as Locale);
+window.addEventListener("quire:locale", () => {
+  closeMenu();
+  statusTextEl.textContent = t(statusKey);
+  renderRail();
+  if (mode === "vault") void refreshFileSearch();
+});
 applyTheme(resolveTheme(display.theme));
 // Only relevant while the preference is "system"; harmless otherwise.
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {

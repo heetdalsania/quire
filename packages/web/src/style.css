@@ -230,6 +230,36 @@ button.link:hover { color: var(--accent); text-decoration: underline; text-under
 
 main { grid-column: 3; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
+#workspace-settings {
+  margin-top: auto; padding: 12px; border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px;
+  align-items: center; font-size: 12px; letter-spacing: 0;
+}
+#workspace-settings button { grid-column: 1 / -1; min-height: 36px; }
+#workspace-settings select { width: 100%; min-width: 0; min-height: 32px; }
+#workspace-settings button, #workspace-settings select, #agent-setup button, #agent-setup select {
+  border: 1px solid var(--rule); border-radius: 5px; background: var(--surface);
+  color: var(--text); padding: 6px 10px; font: inherit; letter-spacing: 0;
+}
+#agent-setup {
+  width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+  box-sizing: border-box; overflow: auto; padding: 24px; border: 1px solid var(--rule);
+  border-radius: 8px; background: var(--base); color: var(--text); letter-spacing: 0;
+}
+#agent-setup::backdrop { background: rgb(0 0 0 / 35%); }
+#agent-setup h2 { margin: 0 40px 20px 0; font-size: 20px; letter-spacing: 0; }
+#agent-setup .agent-close { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; }
+#agent-setup label { display: grid; gap: 6px; margin: 12px 0 8px; font-size: 13px; }
+#agent-setup textarea {
+  box-sizing: border-box; width: 100%; height: 112px; resize: vertical; border: 1px solid var(--rule);
+  border-radius: 4px; padding: 10px; background: var(--surface); color: var(--text);
+  font: 12px/1.5 monospace; overflow-wrap: anywhere; letter-spacing: 0;
+}
+#agent-connection-status { min-height: 24px; overflow-wrap: anywhere; font-size: 13px; }
+#agent-setup button { min-height: 36px; cursor: pointer; }
+#agent-setup button:disabled { opacity: .5; cursor: default; }
+#agent-setup select { width: 100%; min-width: 0; }
+
 #topbar {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 16px;
