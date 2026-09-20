@@ -42,6 +42,9 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Test Chromium, Firefox, and WebKit
         run: npm run test:e2e
+      - name: Repeat WebKit collaborative undo without retries
+        if: success() || failure()
+        run: npx playwright test e2e/agent-setup.spec.ts --project=webkit --grep "Linux undo" --repeat-each=10 --retries=0
 
   release-bundle:
     # Proves the published package actually starts, which the test suite does not.
