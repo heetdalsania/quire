@@ -55,7 +55,8 @@ test("multilingual human input survives undo, redo, language switches and disk p
   await expect(page.locator("#preview")).toContainText(marker);
   await editor.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
   await expect(editor).not.toContainText(marker);
-  await editor.press(process.platform === "darwin" ? "Meta+Shift+z" : "Control+Shift+z");
+  // Physical keys let Shift produce the same uppercase event as a real keyboard.
+  await editor.press(process.platform === "darwin" ? "Meta+Shift+KeyZ" : "Control+Shift+KeyZ");
   await expect(editor).toContainText(marker);
   await page.locator("#interface-language").selectOption("zh-CN");
   await expect(editor).toContainText(marker);
@@ -105,7 +106,6 @@ test("Linux undo shortcuts preserve the initial document and concurrent agent co
   const editor = page.locator(".cm-content");
   await expect(editor).toContainText("Hello 世界");
   const undo = "Control+z";
-  const redo = "Control+y";
   await editor.click();
   await editor.press(undo);
   await expect(editor).toContainText("Hello 世界");
@@ -121,13 +121,15 @@ test("Linux undo shortcuts preserve the initial document and concurrent agent co
     await agent.connect();
     insertAttributed(agent.text, agent.text.length, `\n${remote}\n`, author);
     await expect(editor).toContainText(remote);
-    await editor.press(undo);
-    await expect(editor).not.toContainText(human);
-    await expect(editor).toContainText(remote);
-    await expect(editor).toContainText("Hello 世界");
-    await editor.press(redo);
-    await expect(editor).toContainText(human);
-    await expect(editor).toContainText(remote);
+    for (const redo of ["Control+y", "Control+Shift+KeyZ"]) {
+      await editor.press(undo);
+      await expect(editor).not.toContainText(human);
+      await expect(editor).toContainText(remote);
+      await expect(editor).toContainText("Hello 世界");
+      await editor.press(redo);
+      await expect(editor).toContainText(human);
+      await expect(editor).toContainText(remote);
+    }
   } finally { agent.close(); }
 });
 
