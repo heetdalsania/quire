@@ -121,7 +121,7 @@ test("Linux undo shortcuts preserve the initial document and concurrent agent co
     await agent.connect();
     insertAttributed(agent.text, agent.text.length, `\n${remote}\n`, author);
     await expect(editor).toContainText(remote);
-    for (const redo of ["Control+y", "Control+Shift+KeyZ"]) {
+    for (const redo of Array.from({ length: 5 }, () => ["Control+y", "Control+Shift+KeyZ"]).flat()) {
       await editor.press(undo);
       await expect(editor).not.toContainText(human);
       await expect(editor).toContainText(remote);

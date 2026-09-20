@@ -97,6 +97,10 @@ export async function runBlock(
     let stderr = "";
     let truncated = false;
     let settled = false;
+    let timedOut = false;
+    let childClosed = false;
+    let killTreeDone = true;
+    let killFallback: NodeJS.Timeout | undefined;
 
     const collect = (chunk: Buffer, into: "out" | "err"): void => {
       const text = chunk.toString("utf8");
@@ -115,6 +119,7 @@ export async function runBlock(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (killFallback) clearTimeout(killFallback);
       resolve({
         ok: exitCode === 0,
         language,
@@ -126,17 +131,56 @@ export async function runBlock(
       });
     };
 
+    const timeoutNote = `\n[quire] killed after ${timeoutMs}ms`;
+    const finishTimeoutWhenClosed = (): void => {
+      if (timedOut && childClosed && killTreeDone) finish(null, timeoutNote);
+    };
     const timer = setTimeout(() => {
-      try {
-        process.kill(-child.pid!, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
+      timedOut = true;
+      if (process.platform === "win32") {
+        // child.kill() terminates only the shell on Windows. taskkill /T also waits for
+        // descendants such as `sleep` to exit and release handles in the vault folder.
+        killTreeDone = false;
+        const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        let killerSettled = false;
+        const killed = (): void => {
+          if (killerSettled) return;
+          killerSettled = true;
+          killTreeDone = true;
+          if (!childClosed) child.kill("SIGKILL");
+          finishTimeoutWhenClosed();
+        };
+        killer.once("error", killed);
+        killer.once("close", killed);
+      } else {
+        try {
+          process.kill(-child.pid!, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
       }
-      finish(null, `\n[quire] killed after ${timeoutMs}ms`);
+      // A broken platform kill must not leave the request unresolved forever.
+      killFallback = setTimeout(() => finish(null, timeoutNote), 5_000);
+      killFallback.unref?.();
+      finishTimeoutWhenClosed();
     }, timeoutMs);
 
-    child.on("error", (error) => finish(null, `\n[quire] ${error.message}`));
-    child.on("close", (code) => finish(code));
+    child.on("error", (error) => {
+      if (timedOut) {
+        childClosed = true;
+        finishTimeoutWhenClosed();
+      } else {
+        finish(null, `\n[quire] ${error.message}`);
+      }
+    });
+    child.on("close", (code) => {
+      childClosed = true;
+      if (timedOut) finishTimeoutWhenClosed();
+      else finish(code);
+    });
   });
 }
 

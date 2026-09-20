@@ -13,7 +13,7 @@ test("the disposable demo loads, edits, previews, and persists", async ({ page, 
     webkit: { path: "architecture.md", heading: "Architecture" },
   };
   const selected = documents[browserName];
-  const marker = `Edited in ${browserName}.`;
+  const marker = `Edited in ${browserName}: ${test.info().repeatEachIndex}-${test.info().retry}.`;
 
   await page.goto(`/?doc=${encodeURIComponent(selected.path)}`);
   await expect(page.getByText("live", { exact: true })).toBeVisible({ timeout: 15_000 });
