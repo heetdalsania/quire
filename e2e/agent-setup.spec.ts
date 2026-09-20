@@ -98,6 +98,39 @@ test("Chinese navigation persists without translating content, and suggestions r
   await page.screenshot({ path: test.info().outputPath("chinese-phone-setup.png") });
 });
 
+test("Linux undo shortcuts preserve the initial document and concurrent agent contributions", async ({ page, browserName }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "platform", { get: () => "Linux x86_64" }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/?doc=${encodeURIComponent(path)}`);
+  const editor = page.locator(".cm-content");
+  await expect(editor).toContainText("Hello 世界");
+  const undo = "Control+z";
+  const redo = "Control+y";
+  await editor.click();
+  await editor.press(undo);
+  await expect(editor).toContainText("Hello 世界");
+  await editor.press("Control+End");
+  await editor.press("End");
+  const human = `Human addition ${browserName}`;
+  const remote = `Agent addition ${browserName}`;
+  await page.keyboard.insertText(`\n${human}\n`);
+  await expect(editor).toContainText(human);
+  const author = { id: `undo-agent-${browserName}`, name: "Peer", kind: "agent" as const, color: "#2f9e44" };
+  const agent = new AgentSession(base, path, author);
+  try {
+    await agent.connect();
+    insertAttributed(agent.text, agent.text.length, `\n${remote}\n`, author);
+    await expect(editor).toContainText(remote);
+    await editor.press(undo);
+    await expect(editor).not.toContainText(human);
+    await expect(editor).toContainText(remote);
+    await expect(editor).toContainText("Hello 世界");
+    await editor.press(redo);
+    await expect(editor).toContainText(human);
+    await expect(editor).toContainText(remote);
+  } finally { agent.close(); }
+});
+
 test("shared links cannot produce full-vault setup commands", async ({ page, request }) => {
   const response = await request.post(`${base}/api/share?role=view&path=${encodeURIComponent(path)}`);
   const { token } = await response.json();

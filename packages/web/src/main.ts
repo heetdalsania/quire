@@ -1,10 +1,10 @@
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap } from "@codemirror/commands";
 import { getLocale, initLocale, setLocale, t, t as translate, type Locale } from "./i18n.js";
 import { wireAgentSetup } from "./agent-setup.js";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { yCollab } from "y-codemirror.next";
+import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import { quireEditorTheme, quireHighlight } from "./theme.js";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
@@ -948,8 +948,9 @@ async function open(path: string): Promise<void> {
     state: EditorState.create({
       extensions: [
         lineNumbers(),
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // One history owner for keyboard and native beforeinput undo/redo. The local
+        // CodeMirror history would also record incoming document/peer changes.
+        keymap.of([...yUndoManagerKeymap, ...defaultKeymap]),
         markdown(),
         quireEditorTheme,
         quireHighlight,
