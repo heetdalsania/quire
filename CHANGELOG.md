@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.5 - 2026-09-20
 
 - Serialize filesystem reads and writes per document so delayed watcher snapshots cannot
   replay older saved text over newer edits or undo/redo. Preserve unsaved local edits beside
