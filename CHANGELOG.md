@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Serialize filesystem reads and writes per document so delayed watcher snapshots cannot
+  replay older saved text over newer edits or undo/redo. Preserve unsaved local edits beside
+  suggestions when the disk projection is unchanged; add deterministic race regressions.
 - Use the collaborative history manager consistently for undo/redo, preventing local history
   from treating incoming document content and peer edits as the current user's typing.
 - Add local agent setup for Claude Code, Codex and Cursor, including native Windows configuration,

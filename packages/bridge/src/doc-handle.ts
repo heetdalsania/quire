@@ -59,6 +59,9 @@ export class DocHandle {
    * see applyExternalChange for the three-way semantics.
    */
   applyFromDisk(content: string): boolean {
+    // An unchanged disk projection has no external edit to merge, even if local
+    // edits or pending suggestions have moved the live document ahead of it.
+    if (content === this.lastDiskContent) return false;
     const base = this.lastDiskContent ?? this.getContent();
     let changed = false;
     this.doc.transact(() => {

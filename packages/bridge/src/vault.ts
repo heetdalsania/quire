@@ -89,6 +89,7 @@ export class Vault extends EventEmitter {
   private readonly handles = new Map<string, DocHandle>();
   private readonly writeTimers = new Map<string, NodeJS.Timeout>();
   private readonly inFlight = new Set<Promise<void>>();
+  private readonly fileOperations = new Map<string, Promise<void>>();
   private readonly pendingUnlinks = new Map<string, PendingUnlink>();
   /**
    * Files that appeared very recently. A rename surfaces as an unlink/add pair, but the
@@ -313,7 +314,24 @@ export class Vault extends EventEmitter {
     this.inFlight.add(wrapped);
   }
 
-  private async writeNow(relPath: string): Promise<void> {
+  // Keep each read snapshot paired with its disk merge base. Otherwise a delayed
+  // watcher read can arrive after a newer write and replay our old text as a peer edit.
+  private queueFileOperation(relPath: string, operation: () => Promise<void>): Promise<void> {
+    const previous = this.fileOperations.get(relPath) ?? Promise.resolve();
+    const next = previous.catch(() => {}).then(operation);
+    this.fileOperations.set(relPath, next);
+    const cleanup = (): void => {
+      if (this.fileOperations.get(relPath) === next) this.fileOperations.delete(relPath);
+    };
+    void next.then(cleanup, cleanup);
+    return next;
+  }
+
+  private writeNow(relPath: string): Promise<void> {
+    return this.queueFileOperation(relPath, () => this.writeFileNow(relPath));
+  }
+
+  private async writeFileNow(relPath: string): Promise<void> {
     const handle = this.handles.get(relPath);
     if (!handle || handle.deleted) return;
 
@@ -355,9 +373,9 @@ export class Vault extends EventEmitter {
       },
     });
 
-    watcher.on("add", (abs) => void this.onAdd(abs));
-    watcher.on("change", (abs) => void this.onChange(abs));
-    watcher.on("unlink", (abs) => void this.onUnlink(abs));
+    watcher.on("add", (abs) => this.track(this.onAdd(abs)));
+    watcher.on("change", (abs) => this.track(this.onChange(abs)));
+    watcher.on("unlink", (abs) => this.track(this.onUnlink(abs)));
     watcher.on("error", (err) => this.emit("error", err));
 
     this.watcher = watcher;
@@ -401,7 +419,10 @@ export class Vault extends EventEmitter {
   private async onAdd(abs: string): Promise<void> {
     const relPath = this.toRel(abs);
     if (!relPath || !this.isDocument(relPath)) return;
+    return this.queueFileOperation(relPath, () => this.readAddedFile(abs, relPath));
+  }
 
+  private async readAddedFile(abs: string, relPath: string): Promise<void> {
     const content = await this.readDoc(abs, relPath);
     if (content === null) return;
 
@@ -478,7 +499,10 @@ export class Vault extends EventEmitter {
   private async onChange(abs: string): Promise<void> {
     const relPath = this.toRel(abs);
     if (!relPath || !this.isDocument(relPath)) return;
+    return this.queueFileOperation(relPath, () => this.readChangedFile(abs, relPath));
+  }
 
+  private async readChangedFile(abs: string, relPath: string): Promise<void> {
     const content = await this.readDoc(abs, relPath);
     if (content === null) return;
 
