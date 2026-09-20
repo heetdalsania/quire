@@ -9,6 +9,7 @@ coverage/
 .quire/
 .agents/
 tools/recorder/frames/
+tools/recorder/output/
 playwright-report/
 test-results/
 

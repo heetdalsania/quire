@@ -9,6 +9,13 @@ Requires Google Chrome (used via `puppeteer-core`, so no browser is downloaded).
 `demo.mjs` creates the sample files in a temporary vault, starts a loopback-only server,
 runs the recorder, then stops the server and removes the vault.
 
+For three focused, captioned GIFs (concurrent editing, suggestion review, and removing agent
+additions), build the app and run `node tools/recorder/social.mjs`. This uses the project's
+Playwright Chromium and the recorder-only `gifenc`/`pngjs` dependencies listed below. Outputs
+go to the ignored `tools/recorder/output` directory, or `OUT_DIR` when supplied. The recordings
+use scripted input through real editing sessions, not live model responses. Captions disclose
+this. The recorder asserts the visible results and checks that unaccepted suggestions stay off disk.
+
 ```bash
 # 1. Build the application
 npm run build

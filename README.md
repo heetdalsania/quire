@@ -124,6 +124,20 @@ inserted and 30 deleted lines after an untouched Google Docs import/export round
 
 ## Connecting an agent
 
+[简体中文入门](https://github.com/heetdalsania/quire/blob/main/docs/quickstart.zh-CN.md)
+
+In the development build, **Connect agent** in the vault sidebar generates configuration for
+Claude Code, Codex, or Cursor using the current local server port. Select your platform, copy the
+configuration into your client, then restart/reload that client and send the sample task. The status
+indicates an agent's presence in the selected document, not whether a model account is configured.
+This setup helper does not execute commands or contact an AI provider. It is unavailable on share
+links and non-loopback addresses. On mobile, open **Files** to reach the sidebar.
+
+The development build also includes a persistent language selector with an experimental Simplified
+Chinese translation of core navigation, review actions, and agent setup. Advanced menus fall back
+to English; document content is never translated. Native-speaker review is welcome. These interface
+additions are not yet in the published beta.4 package.
+
 Keep Quire running, then add its local MCP server to the client you use. These commands download
 the published Quire package from npm; they do not require a Quire account or credential.
 
