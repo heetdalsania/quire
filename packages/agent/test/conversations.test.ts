@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +40,7 @@ describe("artifact conversations", () => {
     const disconnecting = manager.unbind("report.md");
     release(); await checked; await disconnecting;
     expect(manager.status("report.md")).toBeNull();
-    expect(await readdir(join(root, ".quire/conversations"))).toEqual([]);
+    expect(await readdir(join(root, ".quire/conversations"))).toEqual([".gitignore"]);
     expect(provider.prompt).not.toHaveBeenCalled();
   });
   it("does not redispatch an already consumed human revision after edits revert", async () => {
@@ -91,13 +92,57 @@ describe("artifact conversations", () => {
     await manager.bind(room, origin);
     await manager.bind({ ...room, handle: vault.getDoc("other.md") }, origin);
     const directory = join(root, ".quire/conversations");
-    expect((await readdir(directory)).sort()).toEqual([bindingFileName("report.md"), bindingFileName("other.md")].sort());
+    expect((await readdir(directory)).sort()).toEqual([".gitignore", bindingFileName("report.md"), bindingFileName("other.md")].sort());
     if (process.platform !== "win32") {
       expect((await stat(directory)).mode & 0o777).toBe(0o700);
       for (const file of await readdir(directory)) expect((await stat(join(directory, file))).mode & 0o777).toBe(0o600);
     }
     await manager.unbind("report.md");
-    expect(await readdir(directory)).toEqual([bindingFileName("other.md")]);
+    expect((await readdir(directory)).sort()).toEqual([".gitignore", bindingFileName("other.md")].sort());
+  });
+  it.skipIf(spawnSync("git", ["--version"]).status !== 0)("ignores private routing JSON and temporary files without hiding the rest of .quire", async () => {
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+    git("init");
+    await manager.bind(room, origin);
+    const directory = join(root, ".quire/conversations");
+    await writeFile(join(directory, "unfinished.tmp"), "private routing data");
+    await writeFile(join(root, ".quire/settings.txt"), "visible settings");
+    const files = git("ls-files", "--others", "--exclude-standard").trim().split("\n");
+    expect(files.filter(file => file.startsWith(".quire/conversations/"))).toEqual([".quire/conversations/.gitignore"]);
+    expect(files).toContain(".quire/settings.txt");
+    const status = git("status", "--porcelain", "--untracked-files=all");
+    expect(status).not.toMatch(/\.quire\/conversations\/.*\.(json|tmp)/);
+    expect(git("check-ignore", "-v", `.quire/conversations/${bindingFileName("report.md")}`)).toContain(".quire/conversations/.gitignore:1:*.json");
+  });
+  it("recreates the ignore file and preserves it across loading and stale binding removal", async () => {
+    await manager.bind(room, origin);
+    const path = join(root, ".quire/conversations/.gitignore");
+    await rm(path);
+    add(); await idle();
+    expect(await readFile(path, "utf8")).toBe("*.json\n*.tmp\n");
+    await manager.close();
+    manager = new ArtifactConversations(vault, provider);
+    await manager.load();
+    expect(manager.paths()).toEqual(["report.md"]);
+    await manager.unbind("report.md");
+    expect(await readdir(join(root, ".quire/conversations"))).toEqual([".gitignore"]);
+  });
+  it("replaces a pre-existing ignore symlink without writing to its target", async () => {
+    const directory = join(root, ".quire/conversations");
+    const target = join(root, "ignore-target.txt");
+    await mkdir(directory, { recursive: true });
+    await writeFile(target, "Do not change\n");
+    await symlink(target, join(directory, ".gitignore"));
+    await manager.bind(room, origin);
+    expect(await readFile(target, "utf8")).toBe("Do not change\n");
+    expect((await lstat(join(directory, ".gitignore"))).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(directory, ".gitignore"), "utf8")).toBe("*.json\n*.tmp\n");
+  });
+  it("does not write binding files if the ignore file cannot be installed", async () => {
+    const directory = join(root, ".quire/conversations");
+    await mkdir(join(directory, ".gitignore"), { recursive: true });
+    await expect(manager.bind(room, origin)).rejects.toThrow();
+    expect(await readdir(directory)).toEqual([".gitignore"]);
   });
   it("refuses symlinked state directories and binding files", async () => {
     await manager.bind(room, origin); await manager.close();
@@ -127,7 +172,7 @@ describe("artifact conversations", () => {
     add("Queued request"); await manager.unbind("report.md");
     expect(manager.status("report.md")).toBeNull();
     expect(provider.prompt).toHaveBeenCalledTimes(1);
-    expect(await readdir(join(root, ".quire/conversations"))).toEqual([]);
+    expect(await readdir(join(root, ".quire/conversations"))).toEqual([".gitignore"]);
   });
   it("answers comments and follow-ups submitted during the fork without replaying old comments", async () => {
     const old = add("Leave this existing comment alone");

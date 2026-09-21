@@ -85,6 +85,12 @@ export class BindingStore {
     const snapshots = bindings.map(binding => ({ name: bindingFileName(binding.doc), data: JSON.stringify({ version: 1, ...binding }, null, 2) }));
     const operation = this.writes.then(async () => {
       const directory = await this.directory();
+      const ignoreTemporary = join(directory, `.gitignore-${randomUUID()}.tmp`);
+      try {
+        const file = await open(ignoreTemporary, "wx", 0o600);
+        try { await file.writeFile("*.json\n*.tmp\n"); await file.sync(); } finally { await file.close(); }
+        await rename(ignoreTemporary, join(directory, ".gitignore"));
+      } finally { await rm(ignoreTemporary, { force: true }); }
       for (const { name, data } of snapshots) {
         if (Buffer.byteLength(data) > MAX_STORE) throw new Error("Conversation state is too large");
         const temporary = join(directory, `${name}-${randomUUID()}.tmp`);
