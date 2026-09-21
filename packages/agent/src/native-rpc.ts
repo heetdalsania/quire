@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 const execute = promisify(execFile);
+const SHUTDOWN_TIMEOUT_MS = 5000;
 type Message = { id?: string | number; method?: string; params?: any; result?: any; error?: { code?: number; message: string } };
 type Pending = { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
 
@@ -16,7 +17,8 @@ export class NativeRpc {
   private closing: Promise<void> | null = null;
   private readonly exited: Promise<void>;
   requestHandler: (message: Message) => Promise<unknown> = async () => { throw new Error("Unsupported agent request"); };
-  constructor(command: string, args: string[], cwd: string, private readonly signal: AbortSignal, private readonly label = "Codex") {
+  constructor(command: string, args: string[], cwd: string, private readonly signal: AbortSignal, private readonly label = "Codex",
+    private readonly shutdown: { graceMs?: number; timeoutMs?: number } = {}) {
     signal.throwIfAborted();
     this.child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32" });
     this.exited = new Promise(resolve => this.child.once("close", () => resolve()));
@@ -87,15 +89,29 @@ export class NativeRpc {
     this.listeners.clear();
     return this.closing;
   }
+  private async finishTermination(cleanup: (signal: AbortSignal) => Promise<void>): Promise<void> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const fallback = new Promise<void>(resolve => {
+      timer = setTimeout(() => {
+        controller.abort();
+        this.child.stdin.destroy(); this.child.stdout.destroy(); this.child.stderr.destroy();
+        this.child.unref();
+        resolve();
+      }, this.shutdown.timeoutMs ?? SHUTDOWN_TIMEOUT_MS);
+    });
+    try { await Promise.race([cleanup(controller.signal), fallback]); }
+    finally { clearTimeout(timer!); }
+  }
   private async terminate(): Promise<void> {
     const pid = this.child.pid;
-    if (!pid) { this.child.stdin.destroy(); await this.exited; return; }
+    if (!pid) { this.child.stdin.destroy(); await this.finishTermination(() => this.exited); return; }
     if (process.platform === "win32") {
       // Kill the tree before killing its root, while taskkill can still find it.
       try { await execute("taskkill", ["/PID", String(pid), "/T", "/F"], { timeout: 10_000 }); }
       catch (error) { if (this.child.exitCode === null && this.child.signalCode === null) throw error; }
       this.child.stdin.destroy();
-      await this.exited; return;
+      await this.finishTermination(() => this.exited); return;
     }
     const exists = (target: number) => {
       try { process.kill(target, 0); return true; }
@@ -123,8 +139,9 @@ export class NativeRpc {
       } while (descendants.size !== size);
       return processes.filter(child => descendants.has(child.id) && child.state && !child.state.startsWith("Z"));
     };
-    const terminateTree = async (signal: NodeJS.Signals) => {
+    const terminateTree = async (signal: NodeJS.Signals, stop?: AbortSignal) => {
       const processes = await running();
+      if (stop?.aborted) return;
       try { process.kill(-pid, signal); }
       catch (error) {
         // macOS can report EPERM for a group containing only orphan zombies.
@@ -132,6 +149,7 @@ export class NativeRpc {
         if (code !== "ESRCH" && !(code === "EPERM" && !(await running()).some(child => child.group === pid))) throw error;
       }
       for (const child of processes) {
+        if (stop?.aborted) return;
         if (child.group === pid) continue;
         try { process.kill(child.id, signal); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
@@ -139,13 +157,18 @@ export class NativeRpc {
     };
     await terminateTree("SIGTERM");
     this.child.stdin.destroy();
-    const deadline = Date.now() + 1500;
+    const deadline = Date.now() + (this.shutdown.graceMs ?? 1500);
     const treeExists = () => exists(-pid) || [...descendants].some(id => exists(id));
     // A leader's exit does not mean its descendants have finished.
     while (treeExists() && Date.now() < deadline) await delay(25);
-    if (treeExists()) await terminateTree("SIGKILL");
-    await this.exited;
-    // Orphan zombies may await init's reaper, but cannot execute further work.
-    while (treeExists() && (await running()).length) await delay(25);
+    await this.finishTermination(async signal => {
+      if (treeExists()) await terminateTree("SIGKILL", signal);
+      await this.exited;
+      // Orphan zombies may await init's reaper, but cannot execute further work.
+      while (!signal.aborted && treeExists() && (await running()).length) {
+        if (signal.aborted) return;
+        await delay(25);
+      }
+    });
   }
 }

@@ -1,11 +1,21 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { promisify } from "node:util";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeRpc } from "../src/native-rpc.js";
 import { CodexConversationProvider } from "../src/codex-conversation.js";
+
+vi.mock("node:child_process", async importOriginal => {
+  const original = await importOriginal<typeof import("node:child_process")>();
+  const { promisify } = await import("node:util");
+  return { ...original, spawn: vi.fn(original.spawn), execFile: Object.assign(vi.fn(original.execFile), {
+    [promisify.custom]: vi.fn(promisify(original.execFile)),
+  }) };
+});
 
 let root: string;
 let rpc: NativeRpc | undefined;
@@ -16,10 +26,32 @@ afterEach(async () => {
   try { await rpc?.close(); }
   finally {
     rpc = undefined;
+    vi.restoreAllMocks(); vi.mocked(spawn).mockReset(); vi.mocked(execute).mockReset();
     for (const pid of pids.splice(0)) { try { process.kill(pid, "SIGKILL"); } catch { /* already reaped */ } }
     await rm(root, { recursive: true, force: true });
   }
 });
+it.skipIf(process.platform === "win32").each([false, true])("bounds cleanup when exit is observed=%s but termination never completes", async observed => {
+  const child = Object.assign(new EventEmitter(), {
+    pid: process.pid, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), unref: vi.fn(),
+  });
+  vi.mocked(spawn).mockReturnValueOnce(child as unknown as ChildProcessWithoutNullStreams);
+  vi.mocked(execute).mockResolvedValue({ stdout: `${child.pid} 1 ${child.pid} S\n`, stderr: "" });
+  const kill = vi.spyOn(process, "kill").mockReturnValue(true);
+  rpc = new NativeRpc("fixture", [], root, new AbortController().signal, "Fixture", { graceMs: 0, timeoutMs: 100 });
+  if (observed) child.emit("close");
+  const started = Date.now();
+  const closed = rpc.close();
+  expect(rpc.close()).toBe(closed);
+  await closed;
+  expect(Date.now() - started).toBeLessThan(1000);
+  expect(kill).toHaveBeenCalledWith(-child.pid, "SIGKILL");
+  expect(kill.mock.calls.filter(call => call[1] === 0).length).toBeGreaterThanOrEqual(observed ? 3 : 2);
+  expect(child.stdin.destroyed).toBe(true);
+  expect(child.stdout.destroyed).toBe(true);
+  expect(child.stderr.destroyed).toBe(true);
+  expect(child.unref).toHaveBeenCalledTimes(1);
+}, 2000);
 async function running(pid: number): Promise<boolean> {
   try { process.kill(pid, 0); } catch { return false; }
   if (process.platform === "win32") return true;
