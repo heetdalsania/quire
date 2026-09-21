@@ -63,6 +63,32 @@ deliberately want to share attribution history. `--no-persist` turns it off enti
 
 ## Known limitations
 
+### Native Codex handoff
+
+Native bindings live in private per-document files under `.quire/conversations/`,
+written atomically with `0600` files and `0700` directories on POSIX. They contain
+native routing IDs, never credentials or transcripts; do not share or commit them.
+Browser status, attribution, run receipts, and shared exports do not expose raw
+native session IDs. Binding is CLI-only: IDs do not belong in review URLs.
+
+Every run receives a random bearer capability for a separate loopback MCP listener
+exposing only `quire_read_artifact` and `quire_propose_replacement`. Host, Origin,
+and capability checks protect this listener. Completion, failure, and cancellation
+revoke tools immediately: open connections are closed and the listener shuts down.
+This adds no authentication semantics to the existing vault-wide MCP endpoint.
+Approval/Disconnect controls are local-only; approvals are single-use, never global.
+
+**Native filesystem and shell tools retain their existing permissions.** The
+artifact tools enforce locks, budgets, attribution, and suggestion review, but do
+not sandbox Codex's other tools. Native writes can bypass review and merge as
+ordinary disk changes. Restrict Codex's own permissions and trust vault commenters,
+whose comments can trigger agent actions. Native model calls use the existing
+account/provider and may transmit document context and incur charges. Uncertain
+runs are never automatically retried. [Native handoff](docs/native-handoff.md)
+documents recovery and the private-state boundary.
+
+### General limitations
+
 - **No authentication or per-document permissions.** Access is all-or-nothing per vault.
 - **No encryption at rest or in transit.** Run behind TLS if you expose it.
 - **Direct peer setup reveals network metadata to public STUN.** Peers use WebRTC encryption, but

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Add an experimental CLI-only native Codex handoff: fork a specified completed turn,
+  continue human comments on a separate child, and propose edits through existing review.
+- Store private per-document bindings atomically with restrictive permissions, stable
+  opaque authors, model provenance, and persisted at-most-once dispatch. Uncertain runs
+  pause until explicit recovery; dispatched comments are never replayed automatically.
+- Scope native artifact tools to authenticated ephemeral loopback capabilities. Add local
+  status, one-time approvals, Disconnect, Simplified Chinese strings, deterministic fixture
+  tests, and an opt-in model-free installed-Codex check. Vault-wide MCP remains unchanged.
+
 ## 0.1.0-beta.5 - 2026-09-20
 
 - Serialize filesystem reads and writes per document so delayed watcher snapshots cannot
