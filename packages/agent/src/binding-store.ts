@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { mkdir, open, readdir, realpath, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { stateFileName } from "@quire/bridge";
@@ -29,12 +29,12 @@ export class BindingStore {
   private writes: Promise<unknown> = Promise.resolve();
   private saved = new Set<string>();
   constructor(private readonly root: string) {}
-  private async directory(): Promise<string> {
+  private async directory(create = true): Promise<string> {
     let directory = await realpath(this.root);
     for (const part of [".quire", "conversations"]) {
       directory = join(directory, part);
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      if (await realpath(directory) !== directory) throw new Error("Conversation directory must not be a symlink");
+      if (create) await mkdir(directory, { recursive: true, mode: 0o700 });
+      if ((await lstat(directory)).isSymbolicLink() || await realpath(directory) !== directory) throw new Error("Conversation directory must not be a symlink");
       if (process.platform !== "win32") {
         const handle = await open(directory, constants.O_RDONLY | constants.O_NOFOLLOW);
         try { await handle.chmod(0o700); } finally { await handle.close(); }
@@ -43,7 +43,12 @@ export class BindingStore {
     return directory;
   }
   async load(): Promise<Binding[]> {
-    const directory = await this.directory();
+    let directory: string;
+    try { directory = await this.directory(false); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
     const entries: Binding[] = [];
     for (const name of await readdir(directory)) {
       if (!name.endsWith(".json")) continue;

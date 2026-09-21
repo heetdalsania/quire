@@ -1,6 +1,6 @@
 import { Server, type IncomingMessage, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -33,6 +33,24 @@ async function bind() {
   server.bindAtStartup({ doc: "report.md", origin, label: "Review" });
   await vi.waitFor(() => expect(server.conversations.status("report.md")?.state).toBe("connected"));
 }
+it("leaves a clean vault without conversation or collaboration state when persistence is disabled", async () => {
+  await server.close();
+  await rm(join(root, ".quire"), { recursive: true, force: true });
+  server = await QuireServer.start({ root, port: 0, git: false, persist: false, conversationProvider: provider });
+  await expect(stat(join(root, ".quire/conversations"))).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(stat(join(root, ".quire"))).rejects.toMatchObject({ code: "ENOENT" });
+  expect(() => server.bindAtStartup({ doc: "report.md", origin })).toThrow(/requires persistent collaboration state/);
+  expect(provider.fork).not.toHaveBeenCalled();
+  await server.close();
+  await expect(stat(join(root, ".quire/conversations"))).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(stat(join(root, ".quire"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+it("still refuses existing bound conversations when persistence is disabled", async () => {
+  await bind();
+  await server.close();
+  await expect(QuireServer.start({ root, port: 0, git: false, persist: false, conversationProvider: provider }))
+    .rejects.toThrow(/Bound native conversations require persistent collaboration state/);
+});
 const comment = () => {
   const handle = server.vault.getDoc("report.md");
   return new CommentStore(handle.doc).add({ text: handle.text, from: 0, to: 8, authorId: "human", authorName: "Human", body: "Revise" });
