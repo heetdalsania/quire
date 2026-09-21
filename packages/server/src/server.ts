@@ -39,6 +39,7 @@ import { isRequestAllowed, isSafeDocPath } from "./security.js";
 import { ShareRegistry, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
+import { ArtifactConversations, NativeConversationProvider, parseOrigin, type ConversationOrigin, type ConversationProvider } from "@quire/agent";
 
 export interface QuireServerOptions extends VaultOptions {
   port?: number;
@@ -63,6 +64,8 @@ export interface QuireServerOptions extends VaultOptions {
    * the server is bound beyond loopback -- see exec.ts.
    */
   allowExec?: boolean;
+  conversationProvider?: ConversationProvider;
+  bindAtStartup?: { doc: string; origin: ConversationOrigin; label?: string };
 }
 
 const MIME: Record<string, string> = {
@@ -87,6 +90,7 @@ export class QuireServer {
   readonly epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   /** Live rooms by document path. Exposed for tests and for embedding hosts. */
   readonly rooms = new Map<string, Room>();
+  readonly conversations: ArtifactConversations;
   private http: Server | null = null;
   private wss: WebSocketServer | null = null;
 
@@ -99,6 +103,11 @@ export class QuireServer {
     private readonly opts: QuireServerOptions,
   ) {
     this.git = opts.git ? new GitSnapshotter(vault, opts.git) : null;
+    this.conversations = new ArtifactConversations(vault, opts.conversationProvider ?? new NativeConversationProvider(vault.root), path => this.publish("conversation", { path }));
+    vault.on("doc:rename", ({ from, to }: { from: string; to: string }) => {
+      const room = this.rooms.get(from);
+      if (room && !this.rooms.has(to)) { this.rooms.delete(from); this.rooms.set(to, room); }
+    });
 
     // Files created by an agent, by the registry, or by another tool used to require a
     // reload before they appeared in the sidebar -- which reads as the app being stale
@@ -119,7 +128,8 @@ export class QuireServer {
   private startRoomSweep(): void {
     this.roomSweep = setInterval(() => {
       for (const [path, room] of this.rooms) {
-        if (room.size === 0) {
+        if (room.size === 0 && !this.conversations.owns(path)) {
+          this.conversations.detach(room);
           room.destroy();
           this.rooms.delete(path);
         }
@@ -128,8 +138,8 @@ export class QuireServer {
     this.roomSweep.unref?.();
   }
 
-  private publish(kind: string): void {
-    const payload = `data: ${JSON.stringify({ kind, files: this.vault.list() })}\n\n`;
+  private publish(kind: string, detail: Record<string, unknown> = {}): void {
+    const payload = `data: ${JSON.stringify({ kind, files: this.vault.list(), ...detail })}\n\n`;
     for (const stream of this.eventStreams) {
       try {
         stream.write(payload);
@@ -142,16 +152,31 @@ export class QuireServer {
   static async start(options: QuireServerOptions): Promise<QuireServer> {
     const vault = await Vault.open(options);
     const server = new QuireServer(vault, options);
-    await server.listen();
-    server.gitReady = Boolean(server.git && (await server.git.isRepo()));
-    if (server.gitReady) server.git?.start();
-    server.startRoomSweep();
-    return server;
+    try {
+      await server.conversations.load();
+      if (options.persist === false && server.conversations.paths().length) throw new Error("Bound native conversations require persistent collaboration state");
+      await server.listen();
+      for (const path of server.conversations.paths()) if (vault.list().includes(path)) server.room(path);
+      if (options.bindAtStartup) server.bindAtStartup(options.bindAtStartup);
+      server.gitReady = Boolean(server.git && (await server.git.isRepo()));
+      if (server.gitReady) server.git?.start();
+      server.startRoomSweep();
+      return server;
+    } catch (error) { await server.close(); throw error; }
   }
 
   get port(): number {
     const address = this.http?.address();
     return typeof address === "object" && address ? address.port : 0;
+  }
+
+  bindAtStartup(input: { doc: string; origin: ConversationOrigin; label?: string }): void {
+    const origin = parseOrigin(input.origin);
+    if (!isSafeDocPath(input.doc) || !this.vault.list().includes(input.doc)) throw new Error("Handoff document not found");
+    if (this.opts.persist === false) throw new Error("Native handoff requires persistent collaboration state");
+    if (this.conversations.owns(input.doc)) throw new Error("Document already bound; restart without origin flags or Disconnect first");
+    if (input.label !== undefined && (!input.label.trim() || input.label.length > 80 || /[\r\n\x00-\x1f]/.test(input.label) || input.label.includes(origin.sessionId))) throw new Error("Invalid origin label");
+    void this.conversations.bind(this.room(input.doc), origin, true, undefined, input.label ?? null).catch(() => {});
   }
 
   /** Live contents of every document, straight from the CRDTs. */
@@ -164,6 +189,7 @@ export class QuireServer {
     if (!room) {
       room = new Room(this.vault.getDoc(path), this.epoch);
       this.rooms.set(path, room);
+      this.conversations.attach(room);
     }
     return room;
   }
@@ -208,9 +234,10 @@ export class QuireServer {
     this.http = http;
     this.wss = wss;
 
-    await new Promise<void>((resolve) =>
-      http.listen(this.opts.port ?? 4321, this.opts.host ?? "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve, reject) => {
+      http.once("error", reject);
+      http.listen(this.opts.port ?? 4321, this.opts.host ?? "127.0.0.1", () => { http.removeListener("error", reject); resolve(); });
+    });
   }
 
   private async onRequest(req: IncomingMessage, res: import("node:http").ServerResponse): Promise<void> {
@@ -226,6 +253,37 @@ export class QuireServer {
       res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(body));
     };
+
+    if (url.pathname.startsWith("/api/agent/conversation")) {
+      res.setHeader("Cache-Control", "no-store");
+      const address = req.socket.remoteAddress;
+      if (!address || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(address) || !isRequestAllowed(req) || url.searchParams.has("share")) {
+        json({ error: "Native conversations are local-only" }, 403); return;
+      }
+      if (url.pathname === "/api/agent/conversation") {
+        if (req.method !== "GET") { json({ error: "Bind through the CLI, not HTTP" }, 405); return; }
+        const path = url.searchParams.get("path") ?? "";
+        if (!isSafeDocPath(path)) { json({ error: "Invalid document path" }, 400); return; }
+        json(this.conversations.status(path)); return;
+      }
+      if (!["decision", "retry", "disconnect"].some(action => url.pathname === `/api/agent/conversation/${action}`)) {
+        json({ error: "Unknown conversation endpoint" }, 404); return;
+      }
+      if (req.method !== "POST") { json({ error: "POST required" }, 405); return; }
+      try {
+        const input = JSON.parse(await readBody(req, 32768));
+        if (typeof input?.doc !== "string" || !isSafeDocPath(input.doc)) throw new Error("Invalid document path");
+        if (url.pathname.endsWith("/decision")) {
+          if (typeof input.id !== "string" || typeof input.accepted !== "boolean") throw new Error("Invalid approval decision");
+          this.conversations.decide(input.doc, input.id, input.accepted);
+        } else if (url.pathname.endsWith("/retry")) {
+          if (this.vault.list().includes(input.doc)) this.room(input.doc);
+          await this.conversations.retry(input.doc);
+        } else await this.conversations.unbind(input.doc);
+        json({ ok: true });
+      } catch (error) { json({ error: error instanceof SyntaxError ? "Invalid request body" : error instanceof Error ? error.message : "Conversation request failed" }, 400); }
+      return;
+    }
 
     if (url.pathname === "/api/files") {
       json({
@@ -657,6 +715,7 @@ export class QuireServer {
   async close(): Promise<void> {
     if (this.roomSweep) clearInterval(this.roomSweep);
     this.roomSweep = null;
+    await this.conversations.close();
     for (const stream of this.eventStreams) stream.end();
     this.eventStreams.clear();
     this.git?.stop();

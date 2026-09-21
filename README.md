@@ -124,6 +124,13 @@ inserted and 30 deleted lines after an untouched Google Docs import/export round
 
 ## Connecting an agent
 
+The development build also supports an experimental **native Codex handoff**:
+`quire <vault> --doc report.md --origin-provider codex --origin-session <id> --origin-turn <id>`
+forks an exact completed turn without a model call, then routes human comments to the
+child conversation and artifact edits to reviewable suggestions. Native filesystem tools
+retain their existing permissions. See [Native handoff](docs/native-handoff.md) for setup,
+privacy, approvals, and recovery; existing MCP collaboration remains unchanged.
+
 [简体中文入门](https://github.com/heetdalsania/quire/blob/main/docs/quickstart.zh-CN.md)
 
 In the development build, **Connect agent** in the vault sidebar generates configuration for

@@ -1,4 +1,5 @@
 import * as decoding from "lib0/decoding";
+import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import type { WebSocket } from "ws";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
@@ -77,6 +78,23 @@ export class Room {
 
   get size(): number {
     return this.sockets.size;
+  }
+
+  setAgentPresence(name: string | null): void {
+    this.awareness.setLocalState(name ? { user: { name, kind: "agent", color: "var(--agent)" } } : null);
+  }
+
+  humanCursors(): Array<{ name: string; index: number }> {
+    const cursors: Array<{ name: string; index: number }> = [];
+    for (const state of this.awareness.getStates().values()) {
+      const peer = state as { user?: { name?: string; kind?: string }; cursor?: { head?: Record<string, number> } };
+      if (peer.user?.kind === "agent" || !peer.cursor?.head) continue;
+      try {
+        const position = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(new Uint8Array(Object.values(peer.cursor.head))), this.handle.doc);
+        if (position?.type === this.handle.text) cursors.push({ name: peer.user?.name ?? "Someone", index: position.index });
+      } catch { continue; }
+    }
+    return cursors;
   }
 
   add(socket: WebSocket, role: "view" | "comment" | "edit" = "edit", isAgent = false): void {

@@ -1033,3 +1033,19 @@ body.commenting #editor { opacity: 0.92; }
   #review-banner > div { min-width: 0; overflow-wrap: anywhere; }
   #replay-label { min-width: 0; overflow-wrap: anywhere; }
 }
+.artifact-conversation {
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.artifact-conversation[hidden] { display: none; }
+.artifact-conversation p { margin: 8px 0; }
+.artifact-conversation button {
+  margin: 4px 6px 0 0; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 5px;
+  background: var(--surface); color: var(--text); font: inherit; letter-spacing: 0;
+}
+.artifact-conversation button:disabled { opacity: .5; cursor: default; }
+.artifact-conversation pre { white-space: pre-wrap; max-height: 240px; overflow: auto; }

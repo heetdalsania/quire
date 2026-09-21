@@ -1,5 +1,5 @@
 {
-  "name": "@quire/server",
+  "name": "@quire/agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,19 +10,11 @@
       "default": "./dist/src/index.js"
     }
   },
-  "scripts": {
-    "build": "tsc --build"
-  },
+  "main": "./dist/src/index.js",
+  "scripts": { "build": "tsc --build" },
   "dependencies": {
-    "@quire/agent": "*",
     "@quire/bridge": "*",
-    "lib0": "^0.2.99",
-    "ws": "^8.18.0",
-    "y-protocols": "^1.0.6",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "yjs": "^13.6.21"
-  },
-  "devDependencies": {
-    "@types/ws": "^8.5.13"
-  },
-  "main": "./dist/src/index.js"
+  }
 }

@@ -1,6 +1,7 @@
 import { defaultKeymap } from "@codemirror/commands";
 import { getLocale, initLocale, setLocale, t, t as translate, type Locale } from "./i18n.js";
 import { wireAgentSetup } from "./agent-setup.js";
+import { ConversationPanel, conversationRequest } from "./conversation.js";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
@@ -63,6 +64,17 @@ const editorEl = $("#editor");
 const previewEl = $("#preview");
 const suggestionsEl = $("#suggestions");
 const commentsEl = $("#comments");
+const conversationPanel = new ConversationPanel(commentsEl.parentElement!, () => void refreshConversation());
+let conversationRequestId = 0;
+async function refreshConversation(): Promise<void> {
+  const path = current;
+  const requestId = ++conversationRequestId;
+  if (!path || new URLSearchParams(location.search).has("share")) { conversationPanel.render(null, null); return; }
+  try {
+    const status = await conversationRequest(`?path=${encodeURIComponent(path)}`);
+    if (requestId === conversationRequestId && path === current) conversationPanel.render(path, status);
+  } catch { }
+}
 const agentsEl = $("#agents");
 const agentsSection = $("#agents-section");
 const backlinksEl = $("#backlinks");
@@ -918,6 +930,8 @@ async function open(path: string): Promise<void> {
   doc?.destroy();
 
   current = path;
+  conversationPanel.render(null, null);
+  void refreshConversation();
   doc = new Y.Doc();
   ytext = doc.getText("content");
   comments = new CommentStore(doc);
@@ -1385,6 +1399,7 @@ const languageSelect = $<HTMLSelectElement>("#interface-language");
 languageSelect.value = getLocale();
 languageSelect.onchange = () => setLocale(languageSelect.value as Locale);
 window.addEventListener("quire:locale", () => {
+  void refreshConversation();
   closeMenu();
   statusTextEl.textContent = t(statusKey);
   renderRail();
@@ -1555,7 +1570,8 @@ async function boot(): Promise<void> {
   // Push, not poll: a file an agent or the registry just created should appear at once.
   const events = new EventSource("/api/events");
   events.onmessage = (message) => {
-    const data = JSON.parse(message.data) as { kind: string; files: string[] };
+    const data = JSON.parse(message.data) as { kind: string; files: string[]; path?: string };
+    if (data.kind === "conversation") { if (data.path === current) void refreshConversation(); return; }
     if (data.kind !== "files") return;
     const changed = data.files.join("\u0000") !== allFiles.join("\u0000");
     if (!changed) return;
@@ -1566,6 +1582,7 @@ async function boot(): Promise<void> {
   };
 
   onColorSchemeChange(() => void paintPreview());
+  setInterval(() => void refreshConversation(), 5000);
 }
 
 await boot();
