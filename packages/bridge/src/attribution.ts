@@ -203,6 +203,16 @@ function visibleRuns(text: Y.Text): VisibleRun[] {
   return runs;
 }
 
+export function committedToFull(text: Y.Text, offset: number): number {
+  const runs = visibleRuns(text);
+  const index = Math.max(0, offset);
+  for (const run of runs) {
+    if (index < run.committed + run.length) return run.full + index - run.committed;
+  }
+  const last = runs.at(-1);
+  return last ? last.full + last.length : 0;
+}
+
 /**
  * Apply an external (on-disk) version to a document that has pending suggestions.
  *

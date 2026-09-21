@@ -1,0 +1,20 @@
+{
+  "name": "@quire/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "main": "./dist/src/index.js",
+  "scripts": { "build": "tsc --build" },
+  "dependencies": {
+    "@quire/bridge": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "yjs": "^13.6.21"
+  }
+}
