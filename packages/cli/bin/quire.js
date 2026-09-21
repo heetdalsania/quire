@@ -47,6 +47,11 @@ if (args.includes("--help") || args.includes("-h")) {
     --allow-exec          Allow running fenced code blocks from documents. Off by
                           default. Runs arbitrary code as you; refused whenever the
                           server is bound beyond localhost.
+    --doc <path>          Open a vault-relative Markdown document.
+    --origin-provider codex  Continue a native Codex conversation on that document.
+    --origin-session <id> Source session to fork; never the most recent session.
+    --origin-turn <id>    Exact completed delivery turn, included in the fork.
+    --origin-label <text> Optional human-readable label (no session IDs).
 
   Requests are refused unless they come from loopback or an allowed host, so a web page
   you happen to have open cannot reach into your vault.
@@ -61,6 +66,21 @@ const flag = (name, fallback) => {
   const i = args.indexOf(name);
   return i === -1 ? fallback : args[i + 1];
 };
+
+const handoffFlags = ["--origin-provider", "--origin-session", "--origin-turn"];
+const usageError = () => {
+  console.error("Usage: quire <vault> --doc <path> [--origin-provider codex --origin-session <id> --origin-turn <id> [--origin-label <text>]]");
+  process.exit(2);
+};
+for (const name of ["--doc", ...handoffFlags, "--origin-label"]) {
+  if (args.includes(name) && (args.indexOf(name) !== args.lastIndexOf(name) || !flag(name) || flag(name).startsWith("--"))) usageError();
+}
+const doc = flag("--doc");
+const handoff = handoffFlags.some(name => args.includes(name)) || args.includes("--origin-label");
+if (handoff && (!doc || !handoffFlags.every(name => args.includes(name)) || flag("--origin-provider") !== "codex" || args.includes("--no-persist"))) usageError();
+if (handoff && [flag("--origin-session"), flag("--origin-turn")].some(value => !/^[\w-]{1,160}$/.test(value))) usageError();
+const label = flag("--origin-label");
+if (label && (label.length > 80 || !label.trim() || /[\r\n\x00-\x1f]/.test(label) || label.includes(flag("--origin-session")))) usageError();
 
 const positional = args.filter((a, i) => !a.startsWith("--") && !String(args[i - 1] ?? "").startsWith("--"));
 const demo = args.includes("--demo");
@@ -135,6 +155,7 @@ try {
     allowExec: args.includes("--allow-exec"),
     history: args.includes("--history"),
     persist: !args.includes("--no-persist"),
+    ...(handoff ? { bindAtStartup: { doc, origin: { provider: "codex", sessionId: flag("--origin-session"), turnId: flag("--origin-turn") }, ...(label ? { label } : {}) } } : {}),
   });
 } catch (error) {
   if (demoRoot) await rm(demoRoot, { recursive: true, force: true });
@@ -145,7 +166,7 @@ const count = server.vault.list().length;
 console.log(`\n  Quire\n`);
 console.log(`  vault   ${root}`);
 console.log(`  docs    ${count} markdown file${count === 1 ? "" : "s"}`);
-console.log(`  local   http://127.0.0.1:${server.port}\n`);
+console.log(`  local   http://127.0.0.1:${server.port}${doc ? `/?doc=${encodeURIComponent(doc)}` : ""}\n`);
 if (demoRoot) console.log(`  demo    disposable -- removed when Quire stops`);
 const snapshots = server.git && (await server.git.isRepo());
 console.log(`  git     ${snapshots ? "snapshots on (commits when idle)" : "not a repository -- snapshots off"}`);
@@ -156,7 +177,10 @@ if (args.includes("--allow-exec")) {
   console.log(`  exec    ENABLED -- documents in this vault can run code as you`);
 }
 if (allowedHosts.length > 0) console.log(`  trusted ${allowedHosts.join(", ")}`);
-console.log(`\n  Local only. Nothing is uploaded and no account is needed.`);
+console.log(`\n  The editor stays local. Connected native agents use their existing accounts and providers.`);
+if (handoff || server.conversations.paths().length) {
+  console.log("  Native handoff: artifact tools propose changes for review; native filesystem tools retain their existing permissions.");
+}
 console.log(`  Ctrl+C to stop.\n`);
 
 let shuttingDown = false;

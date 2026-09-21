@@ -14,6 +14,7 @@
     "build": "tsc --build"
   },
   "dependencies": {
+    "@quire/agent": "*",
     "@quire/bridge": "*",
     "lib0": "^0.2.99",
     "ws": "^8.18.0",
