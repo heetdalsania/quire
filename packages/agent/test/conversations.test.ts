@@ -195,6 +195,8 @@ describe("artifact conversations", () => {
     expect(provider.prompt).toHaveBeenCalledTimes(1);
     expect(vi.mocked(provider.prompt).mock.calls[0]![0]).toBe("native-child");
     expect(vi.mocked(provider.prompt).mock.calls[0]![1]).toContain("The original report");
+    expect(vi.mocked(provider.prompt).mock.calls[0]![1]).toContain("Artifact: report.md");
+    expect(vi.mocked(provider.prompt).mock.calls[0]![1]).not.toContain(vault.root);
     expect(store.list().find(t => t.id === old)!.replies).toHaveLength(0);
     expect(store.list().find(t => t.id === first)!.replies.at(-1)!.body).toBe("Native answer");
     store.reply(first, "And what follows?", "human", "Human"); await idle();
