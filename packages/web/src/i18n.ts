@@ -1,6 +1,23 @@
 export type Locale = "en" | "zh-CN";
 
 const chinese: Record<string, string> = {
+  "Artifact conversation": "文档会话", "Connecting…": "正在连接…", "Connected": "已连接",
+  "Working…": "正在处理…", "Your approval needed": "需要你的批准", "Connection failed": "连接失败",
+  "Run outcome uncertain": "执行结果不确定", "Approve once": "仅批准本次", "Decline": "拒绝",
+  "Disconnect": "断开连接", "Retry after checking session": "检查会话后重试",
+  "Command approval": "命令执行审批", "File change approval": "文件修改审批", "Tool approval": "工具调用审批",
+  "Conversation request failed": "会话请求失败",
+  "Comments continue a separate copy of the originating conversation. The original chat is unchanged.": "评论会继续原始会话的独立副本，原始聊天保持不变。",
+  "The run outcome is uncertain. Inspect the native child before Retry; actions may already have run. Retry resumes new comments only, never replays this request.": "执行结果不确定，操作可能已经发生。请先检查原生子会话，再重试。重试只恢复新评论的处理，不会重放本次请求。",
+  "The document was deleted. Disconnect before discussing a replacement file.": "文档已删除。请先断开连接，再讨论替换文件。",
+  "The document was renamed onto another bound document. Disconnect explicitly.": "文档重命名后与其他已绑定文档冲突，请主动断开连接。",
+  "Codex handoff failed. Check the completed turn and local native configuration, then Retry.": "Codex 交接失败。请检查已完成的轮次及本地原生配置，再重试。",
+  "Approval expired or belongs to another request": "审批已过期或不属于本次请求",
+  "An approval is already pending": "已有待处理的审批",
+  "Invalid approval decision": "无效的审批决定", "No failed conversation to retry": "没有需要重试的失败会话",
+  "Conversation is still running": "会话仍在执行中", "Disconnect this conversation before rebinding": "请先断开此会话，再重新绑定",
+  "Native conversations are local-only": "原生会话仅限本机访问", "Invalid request body": "请求内容无效",
+  "Invalid document path": "文档路径无效",
   "Files": "文件", "Edit": "编辑", "Preview": "预览", "Comments": "评论",
   "Split": "分栏", "Vault": "文档库", "Discover": "发现", "Suggestions": "修改建议",
   "Comment": "评论", "Authors": "作者", "Suggesting": "建议模式", "Snapshot": "快照",
