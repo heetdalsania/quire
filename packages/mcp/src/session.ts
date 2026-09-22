@@ -33,6 +33,7 @@ export class AgentSession {
     private readonly baseUrl: string,
     readonly path: string,
     private readonly author: Author,
+    private readonly shareToken?: string,
   ) {
     this.text = this.doc.getText("content");
     this.awareness = new Awareness(this.doc);
@@ -44,6 +45,7 @@ export class AgentSession {
     // rather than sniffed because an agent that hides is a worse failure than one that
     // is trusted to say so and then constrained by the server regardless.
     url.searchParams.set("kind", "agent");
+    if (this.shareToken) url.searchParams.set("share", this.shareToken);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(url.toString());
     this.ws = ws;

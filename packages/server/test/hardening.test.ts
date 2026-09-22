@@ -97,7 +97,7 @@ describe("cross-origin access", () => {
 
 describe("hostile and unusual filenames", () => {
   it("handles unicode, spaces and dots in names", async () => {
-    const names = ["a doc with spaces.md", "üñïçødé-café.md", "dotted.name.v2.md", "ALLCAPS.MD"];
+    const names = ["a doc with spaces.md", "üñïçødé-café.md", "dotted.name.v2.md", "ALLCAPS.MD", "SKILL.md"];
     for (const name of names) await writeFile(join(dir, name), `# ${name}\n`, "utf8");
     await sleep(600);
     const { files } = (await (await fetch(`${base()}/api/files`)).json()) as { files: string[] };

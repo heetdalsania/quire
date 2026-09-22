@@ -19,6 +19,8 @@ if (args.includes("--help") || args.includes("-h")) {
                       document at once; the role is what makes their work legible.
     --model <id>      Model identifier recorded in provenance, e.g. claude-opus-5
     --color <hex>     Cursor colour
+    --share <token>   Capability from an edit share link. Required for remote servers;
+                      QUIRE_SHARE_TOKEN may be used instead to keep it out of arguments.
     --impolite        Do not yield when a human is editing the same passage
 
   Agent connections are leashed by the document's own policy -- insert and delete
@@ -29,12 +31,20 @@ if (args.includes("--help") || args.includes("-h")) {
   process.exit(0);
 }
 
+const shareToken = flag("--share", process.env.QUIRE_SHARE_TOKEN ?? "");
+if ((args.includes("--share") && !shareToken) ||
+    (shareToken && (!/^[A-Za-z0-9_-]{16,128}$/.test(shareToken) || args.filter((arg) => arg === "--share").length > 1))) {
+  console.error("Invalid --share capability token");
+  process.exit(2);
+}
+
 await runStdio({
   serverUrl: flag("--url", "http://127.0.0.1:4321"),
   agentName: flag("--name", "Claude"),
   agentColor: flag("--color", "#ea9d34"),
   model: flag("--model", ""),
   role: flag("--role", ""),
+  shareToken,
   // Politeness is on by default: colliding with someone mid-sentence is the rude default,
   // and an agent that yields is the whole point of being a peer rather than a process.
   polite: !args.includes("--impolite"),

@@ -53,8 +53,9 @@ paths, and document contents. On phones and tablets, use **Files**, **Edit**, **
 have **Edit / Split / Preview** controls.
 
 A phone connects to the computer running Quire; `localhost` on the phone refers to the phone
-itself. Before making a vault reachable by workshop attendees, read the
-[network access limitations](./SECURITY.md#exposing-a-vault-beyond-your-machine).
+itself. For a workshop or hackathon with remote people and agents, follow the
+[team collaboration guide](./docs/team-collaboration.md) and read the
+[network security model](./SECURITY.md#exposing-a-vault-beyond-your-machine).
 
 ## Where it sits
 
@@ -116,7 +117,7 @@ inserted and 30 deleted lines after an untouched Google Docs import/export round
 | **Provenance receipts** | One click turns a document into a shareable page: how much a person wrote, how much an agent did, which suggestions were accepted, and a replay of it being written. Self-contained HTML — no server, no account, works offline |
 | **Review requests** | Send a link with a brief. The reviewer comments without an account, and comment-only is enforced by the server rather than by hiding the editor |
 | **Suggesting mode** | People get the same suggest mode agents have. Your edits become proposals and stay off disk until accepted |
-| **Share links** | Capability links scoped to a file or the vault, with view / comment / edit. View is enforced server-side |
+| **Share links** | Capability links scoped to a file or the vault, with view / comment / edit. External browser and MCP access requires a capability; scope and role are enforced server-side |
 | **Export** | Markdown, self-contained HTML, plain text, copy-with-formatting for pasting into Docs, and print or save as PDF |
 | **Typography** | Prose and editor typefaces, size, leading, measure, theme, and a focus mode. Display only — never a byte of the file |
 | **GitHub search** | Search GitHub from Discover for anything the curated index misses, then pick which Markdown file to bring across |
@@ -134,11 +135,12 @@ privacy, approvals, and recovery; existing MCP collaboration remains unchanged.
 [简体中文入门](https://github.com/heetdalsania/quire/blob/main/docs/quickstart.zh-CN.md)
 
 In the development build, **Connect agent** in the vault sidebar generates configuration for
-Claude Code, Codex, or Cursor using the current local server port. Select your platform, copy the
-configuration into your client, then restart/reload that client and send the sample task. The status
-indicates an agent's presence in the selected document, not whether a model account is configured.
-This setup helper does not execute commands or contact an AI provider. It is unavailable on share
-links and non-loopback addresses. On mobile, open **Files** to reach the sidebar.
+Claude Code, Codex, or Cursor using the current server. Local owner sessions receive local setup;
+edit-share sessions receive configuration containing that share's scoped capability. Select your
+platform, copy the configuration into your client, then restart/reload that client and send the
+sample task. The status indicates an agent's presence in the selected document, not whether a
+model account is configured. This helper does not execute commands or contact an AI provider.
+On mobile, open **Files** to reach the sidebar.
 
 The development build also includes a persistent language selector with an experimental Simplified
 Chinese translation of core navigation, review actions, and agent setup. Advanced menus fall back
@@ -193,6 +195,10 @@ plan; that is separate from Quire, which remains free and local.
 Tools: `list_documents`, `read_document`, `edit_document` (with `suggest`), `append_document`,
 `list_suggestions`, `list_comments`, `add_comment`, `search_vault`.
 
+For a remote teammate's agent, create an edit share link and pass its capability privately as
+`QUIRE_SHARE_TOKEN`; see [Team collaboration](./docs/team-collaboration.md). The agent receives only
+the link's document or vault scope. Capability links should travel only over HTTPS or a trusted VPN.
+
 The agent gets a presence identity and a cursor. You can type straight through its edits —
 CRDTs make that a non-event.
 
@@ -219,9 +225,10 @@ payment integration. Discover does not read or forward `GITHUB_TOKEN`. Third-par
 through Discover is data, not executable code, but agent instruction files can influence an agent
 that later reads them; inspect imported content before relying on it.
 
-The server serves only its own origin and rejects cross-origin browser requests. **There is no
-authentication**, so treat `--host 0.0.0.0` as "anyone who can reach this port can read and edit the
-vault." The complete threat model and limitations are in [SECURITY.md](./SECURITY.md).
+The server serves only its own origin and rejects cross-origin browser requests. The loopback URL
+is the owner session; non-loopback browser and MCP access requires a scoped capability link. Quire
+does not provide TLS, so use a trusted VPN or HTTPS tunnel rather than exposing its HTTP port
+directly. The complete threat model and limitations are in [SECURITY.md](./SECURITY.md).
 
 ## Cost
 
@@ -236,9 +243,9 @@ charge under that provider's own plan. None is required for local Quire.
 docker compose up --build
 ```
 
-The container binds to `127.0.0.1` deliberately. Quire has no authentication, so anyone who
-can reach the port can read and edit every document — read [SECURITY.md](./SECURITY.md)
-before widening that.
+The container binds to `127.0.0.1` deliberately. External access requires capability links, but
+Quire does not terminate TLS; read [SECURITY.md](./SECURITY.md) and the
+[team guide](./docs/team-collaboration.md) before widening that.
 
 ## Community
 

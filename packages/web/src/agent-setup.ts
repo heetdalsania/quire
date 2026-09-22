@@ -3,6 +3,7 @@ import { t } from "./i18n.js";
 
 export type AgentClient = "claude" | "codex" | "cursor";
 export type AgentPlatform = "posix" | "windows";
+export interface SharedAgentOrigin { origin: string; token: string }
 
 export function localAgentOrigin(href: string): string | null {
   try {
@@ -13,17 +14,29 @@ export function localAgentOrigin(href: string): string | null {
   } catch { return null; }
 }
 
-export function agentConfiguration(client: AgentClient, platform: AgentPlatform, origin: string): string {
-  const safeOrigin = localAgentOrigin(origin);
-  if (!safeOrigin) throw new Error("Localhost session required");
+export function sharedAgentOrigin(href: string): SharedAgentOrigin | null {
+  try {
+    const url = new URL(href);
+    const token = url.searchParams.get("share") ?? "";
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
+        !/^[A-Za-z0-9_-]{16,128}$/.test(token)) return null;
+    return { origin: url.origin, token };
+  } catch { return null; }
+}
+
+export function agentConfiguration(client: AgentClient, platform: AgentPlatform, origin: string, shareToken?: string): string {
+  const shared = shareToken ? sharedAgentOrigin(`${origin}/?share=${encodeURIComponent(shareToken)}`) : null;
+  const safeOrigin = shared?.origin ?? localAgentOrigin(origin);
+  if (!safeOrigin) throw new Error("Localhost or shared session required");
   const name = { claude: "Claude Code", codex: "Codex", cursor: "Cursor" }[client];
   const args = ["-y", "-p", "quiredocs@latest", "quire-mcp", "--url", safeOrigin, "--name", name];
+  if (shared) args.push("--share", shared.token);
   if (client === "cursor") return JSON.stringify({ mcpServers: { quire: {
     command: platform === "windows" ? "cmd" : "npx",
     args: platform === "windows" ? ["/c", "npx", ...args] : args,
   } } }, null, 2);
   // All variable command fields are validated origins or closed-set client names.
-  return `${client} mcp add quire -- ${platform === "windows" ? "cmd /c " : ""}npx -y -p quiredocs@latest quire-mcp --url "${safeOrigin}" --name "${name}"`;
+  return `${client} mcp add quire -- ${platform === "windows" ? "cmd /c " : ""}npx -y -p quiredocs@latest quire-mcp --url "${safeOrigin}" --name "${name}"${shared ? ` --share ${shared.token}` : ""}`;
 }
 
 export function sampleTask(path: string): string {
@@ -62,7 +75,8 @@ export function wireAgentSetup(button: HTMLButtonElement, state: () => {
     close.onclick = () => dialog?.close();
     dialog.append(title, close);
     dialog.onclose = () => { dialog?.remove(); dialog = null; status = null; task = null; copyTask = null; button.focus(); };
-    const origin = localAgentOrigin(location.href);
+    const shared = sharedAgentOrigin(location.href);
+    const origin = localAgentOrigin(location.href) ?? shared?.origin ?? null;
     if (!origin) {
       const message = document.createElement("p");
       message.textContent = t("Localhost session required");
@@ -86,7 +100,7 @@ export function wireAgentSetup(button: HTMLButtonElement, state: () => {
       const config = document.createElement("textarea");
       config.readOnly = true;
       config.spellcheck = false;
-      const updateConfig = (): void => { config.value = agentConfiguration(client, platform, origin); };
+      const updateConfig = (): void => { config.value = agentConfiguration(client, platform, origin, shared?.token); };
       field("Client", select<AgentClient>([["claude", "Claude Code"], ["codex", "Codex"], ["cursor", "Cursor (.cursor/mcp.json)"]], client, (value) => { client = value; updateConfig(); }));
       field("Platform", select<AgentPlatform>([["posix", "macOS / Linux / WSL"], ["windows", "Windows"]], platform, (value) => { platform = value; updateConfig(); }));
       field("Configuration", config);

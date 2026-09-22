@@ -19,7 +19,8 @@ Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its
 - **GitHub search needs no account.** It uses the unauthenticated repository-search endpoint, which
   is rate limited to roughly ten requests a minute; results are cached and limiting is reported
   plainly. Quire does not read or transmit `GITHUB_TOKEN` or any other credential.
-- **No accounts.** Identity is a display name generated in your browser.
+- **No accounts.** Identity is a display name generated in your browser. External access uses
+  random capability links rather than user accounts.
 - **Requests are origin-checked.** Browsers permit cross-origin WebSocket upgrades with no
   preflight, and a cross-origin `GET /api/files` needs no CORS approval to be *sent*. Without a
   check, any page you had open could read and rewrite your vault. Quire refuses a request whose
@@ -38,9 +39,16 @@ Quire is a local-first tool. By default it binds `127.0.0.1` and serves only its
 
 ## Exposing a vault beyond your machine
 
-`--host 0.0.0.0` and `--allow-host <name>` widen access deliberately. **There is no
-authentication yet**: anyone who can reach the port can read and edit every document in the vault.
-Only do this on a network you trust, or behind something that provides authentication.
+`--host 0.0.0.0` and `--allow-host <name>` widen reachability deliberately. The owner session is
+restricted to the loopback URL. External browser and MCP requests need a valid view, comment or
+edit capability; file-scoped capabilities also scope listing, search and document APIs. Privileged
+operations such as creating links, changing policy, installing content, code execution and Git
+snapshots remain loopback-only.
+
+Quire does not terminate TLS or provide a relay. Use a trusted VPN or HTTPS tunnel and preserve the
+public Host header. Do not expose the plain HTTP port to the internet: a capability URL is a bearer
+credential, and anyone who obtains it receives its role until it expires, is revoked, or the server
+restarts.
 
 ## What the agent leash is, and is not
 
@@ -49,9 +57,10 @@ is enforced by the server on connections that identify themselves as agents. It 
 guardrail against the realistic failure: an agent looping, over-deleting, or wandering into
 a section it was told to leave alone.
 
-**It is not a defence against a hostile client.** A connection can simply not declare
-itself an agent, and there is no authentication to tell one caller from another. Anything
-that can reach the port can already write. Treat the leash as a seatbelt, not a lock.
+**It is not a defence against a hostile holder of an edit capability.** A connection can simply
+not declare itself an agent and will not receive agent budgets. Capabilities control which
+documents and role a caller receives; the leash controls well-behaved agent activity inside that
+role. Treat the link as the lock and the leash as a separate damage limit.
 
 ## Where collaboration state lives
 
@@ -75,7 +84,7 @@ Every run receives a random bearer capability for a separate loopback MCP listen
 exposing only `quire_read_artifact` and `quire_propose_replacement`. Host, Origin,
 and capability checks protect this listener. Completion, failure, and cancellation
 revoke tools immediately: open connections are closed and the listener shuts down.
-This adds no authentication semantics to the existing vault-wide MCP endpoint.
+This listener is separate from the vault MCP endpoint and does not broaden a vault share.
 Approval/Disconnect controls are local-only; approvals are single-use, never global.
 
 **Native filesystem and shell tools retain their existing permissions.** The
@@ -89,7 +98,9 @@ documents recovery and the private-state boundary.
 
 ### General limitations
 
-- **No authentication or per-document permissions.** Access is all-or-nothing per vault.
+- **No accounts or individual user ACLs.** Access is granted by bearer capabilities. A link may be
+  scoped to one document or the vault, but it is not tied to a person and cannot distinguish two
+  people who share it.
 - **No encryption at rest or in transit.** Run behind TLS if you expose it.
 - **Direct peer setup reveals network metadata to public STUN.** Peers use WebRTC encryption, but
   each side and the STUN service can observe connection metadata and IP addresses.
@@ -107,7 +118,8 @@ documents recovery and the private-state boundary.
   update comment and awareness data but text edits are rejected by inspecting the CRDT update.
   These are still capability links: possession of the URL grants its role.
 - **Share links are capabilities.** There are no accounts, so the link *is* the credential. Anyone
-  holding it has the role baked into it. Links live in memory and die when the server stops.
+  holding it has the role baked into it. Links live in memory and die when the server stops. Remote
+  MCP agents require an edit capability through `QUIRE_SHARE_TOKEN` or `--share`.
 - **Suggestions are advisory.** Any connected client can accept one; there is no reviewer role.
 - **Registry documents are third-party content.** Quire records where each installed file came
   from and under what licence, but does not vet it. A `CLAUDE.md` you install changes how agents

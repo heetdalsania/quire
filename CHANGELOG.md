@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Require scoped capabilities for all non-loopback browser and MCP vault access. Carry document
+  scope through file listing, search, events, document APIs and receipts while keeping link
+  creation, policy, installs, execution and snapshots local-owner-only.
+- Let remote MCP agents authenticate with an edit-link capability through `QUIRE_SHARE_TOKEN` or
+  `--share`, with server-enforced role and document scope. Add a free, accountless team workflow
+  guide and explicit `SKILL.md` compatibility coverage.
 - Add an experimental CLI-only native Codex handoff: fork a specified completed turn,
   continue human comments on a separate child, and propose edits through existing review.
 - Store private per-document bindings atomically with restrictive permissions, stable

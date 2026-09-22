@@ -14,9 +14,11 @@ let transport: StdioClientTransport;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "quire-protocol-"));
   await writeFile(join(root, "doc.md"), "# Protocol\n\nOriginal sentence.\n");
+  await writeFile(join(root, "private.md"), "not shared\n");
   server = await QuireServer.start({ root, port: 0, git: false, persist: false });
+  const share = server.shares.create({ role: "edit", path: "doc.md" });
   const moduleUrl = new URL("../dist/src/server.js", import.meta.url).href;
-  const options = { serverUrl: `http://127.0.0.1:${server.port}`, agentName: "Test", agentColor: "#008080" };
+  const options = { serverUrl: `http://127.0.0.1:${server.port}`, agentName: "Test", agentColor: "#008080", shareToken: share.token };
   transport = new StdioClientTransport({
     command: process.execPath,
     args: ["--input-type=module", "-e", `import { runStdio } from ${JSON.stringify(moduleUrl)}; await runStdio(${JSON.stringify(options)});`],
@@ -42,6 +44,14 @@ it("publishes usable JSON schemas for all MCP tools", async () => {
   expect(read.inputSchema.properties?.path).toMatchObject({ type: "string" });
   const policy = tools.find((tool) => tool.name === "set_agent_policy")!;
   expect(policy.inputSchema.properties?.mode).toMatchObject({ enum: ["edit", "propose", "read-only"] });
+});
+
+it("shows a scoped remote agent only the shared document", async () => {
+  const listed = await client.callTool({ name: "list_documents", arguments: {} });
+  expect(JSON.stringify(listed.content)).toContain("doc.md");
+  expect(JSON.stringify(listed.content)).not.toContain("private.md");
+  const read = await client.callTool({ name: "read_document", arguments: { path: "private.md" } });
+  expect(read.isError).toBe(true);
 });
 
 it("rejects malformed arguments over the actual MCP transport", async () => {

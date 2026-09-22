@@ -13,6 +13,8 @@ import type { IncomingMessage } from "node:http";
  */
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"]);
+const OWNER_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const OWNER_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 const hostnameOf = (value: string): string => {
   const bare = value.replace(/^\[/, "[").trim();
@@ -45,6 +47,28 @@ export function isRequestAllowed(req: IncomingMessage, policy: OriginPolicy = {}
 
   try {
     return isTrustedHostname(new URL(origin).hostname.toLowerCase(), policy);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True only for the owner-facing loopback URL.
+ *
+ * Host and socket address are both checked. A reverse tunnel commonly connects to Quire
+ * from loopback, but preserves its public Host header; treating that as local would turn
+ * the tunnel into an unauthenticated owner session. Conversely, a machine on the LAN can
+ * forge a loopback Host header, but its socket address still gives it away.
+ */
+export function isLocalOwnerRequest(req: IncomingMessage): boolean {
+  const address = req.socket.remoteAddress;
+  if (!address || !OWNER_ADDRESSES.has(address)) return false;
+  const host = req.headers.host;
+  if (host && !OWNER_HOSTS.has(hostnameOf(host))) return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return OWNER_HOSTS.has(new URL(origin).hostname.toLowerCase());
   } catch {
     return false;
   }

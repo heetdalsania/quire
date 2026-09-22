@@ -28,6 +28,6 @@ EXPOSE 4321
 
 # tini reaps zombies, which matters because a vault can spawn git and ripgrep.
 ENTRYPOINT ["/sbin/tini", "--"]
-# 0.0.0.0 so the container is reachable. Quire has no authentication, so only publish this
-# port on a network you trust -- see SECURITY.md.
+# 0.0.0.0 so the container is reachable. Publish this port on loopback unless a trusted
+# VPN or TLS proxy carries Quire's scoped capability links.
 CMD ["node", "dist/quire.js", "/vault", "--host", "0.0.0.0", "--port", "4321"]

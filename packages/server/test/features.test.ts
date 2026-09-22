@@ -27,8 +27,7 @@ describe("executable documents", () => {
   });
 
   it("refuses whenever the server is reachable beyond localhost", async () => {
-    // Quire has no authentication, so an exposed server with execution enabled would hand
-    // a shell to anyone who could reach the port.
+    // A document capability must never become permission to run a shell on the host.
     await expect(runBlock("bash", "echo hi", { ...base, enabled: true, exposed: true })).rejects.toThrow(
       /beyond localhost/,
     );
