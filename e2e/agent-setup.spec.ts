@@ -133,11 +133,13 @@ test("Linux undo shortcuts preserve the initial document and concurrent agent co
   } finally { agent.close(); }
 });
 
-test("shared links cannot produce full-vault setup commands", async ({ page, request }) => {
-  const response = await request.post(`${base}/api/share?role=view&path=${encodeURIComponent(path)}`);
+test("shared links produce only capability-scoped agent setup", async ({ page, request }) => {
+  const response = await request.post(`${base}/api/share?role=edit&path=${encodeURIComponent(path)}`);
   const { token } = await response.json();
   await page.goto(`${base}/?share=${token}&doc=${encodeURIComponent(path)}`);
   await page.locator("#connect-agent").click();
-  await expect(page.getByRole("dialog")).toContainText("Localhost session required");
-  await expect(page.getByLabel("Configuration", { exact: true })).toHaveCount(0);
+  const config = page.getByLabel("Configuration", { exact: true });
+  await expect(config).toBeVisible();
+  await expect(config).toHaveValue(new RegExp(`--share ${token}`));
+  await expect(config).toHaveValue(new RegExp(`--url "${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
 });

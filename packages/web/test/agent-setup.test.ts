@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentConfiguration, localAgentOrigin, sampleTask } from "../src/agent-setup.js";
+import { agentConfiguration, localAgentOrigin, sampleTask, sharedAgentOrigin } from "../src/agent-setup.js";
 import { resolveLocale } from "../src/i18n.js";
 
 describe("local agent setup", () => {
@@ -18,6 +18,19 @@ describe("local agent setup", () => {
     expect(config.mcpServers.quire.command).toBe("cmd");
     expect(config.mcpServers.quire.args.slice(0, 2)).toEqual(["/c", "npx"]);
     expect(config.mcpServers.quire.args).toContain("http://localhost:4567");
+  });
+  it("generates document-scoped setup from a share capability", () => {
+    const token = "abcdefghijklmnopqrstuvwx";
+    expect(sharedAgentOrigin(`https://quire.example/?share=${token}&doc=plan.md`)).toEqual({
+      origin: "https://quire.example", token,
+    });
+    const command = agentConfiguration("codex", "posix", "https://quire.example", token);
+    expect(command).toContain('--url "https://quire.example"');
+    expect(command).toContain(`--share ${token}`);
+  });
+  it.each(["short", "spaces are unsafe", "../../escape", ""])("rejects invalid share token %s", (token) => {
+    expect(sharedAgentOrigin(`https://quire.example/?share=${encodeURIComponent(token)}`)).toBeNull();
+    expect(() => agentConfiguration("codex", "posix", "https://quire.example", token || undefined)).toThrow();
   });
   it("quotes Unicode document paths as data and asks for a suggestion", () => {
     const path = '计划/草稿 "one".md';

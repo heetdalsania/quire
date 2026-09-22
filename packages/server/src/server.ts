@@ -35,8 +35,8 @@ import {
 } from "./lockfile.js";
 import { ExecRefused, formatResult, runBlock, supportedLanguages } from "./exec.js";
 import { collectReceipt, renderReceipt } from "./receipt.js";
-import { isRequestAllowed, isSafeDocPath } from "./security.js";
-import { ShareRegistry, type ShareRole } from "./sharing.js";
+import { isLocalOwnerRequest, isRequestAllowed, isSafeDocPath } from "./security.js";
+import { ShareRegistry, type Share, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
 import { ArtifactConversations, NativeConversationProvider, parseOrigin, type ConversationOrigin, type ConversationProvider } from "@quire/agent";
@@ -81,7 +81,7 @@ export class QuireServer {
   readonly shares = new ShareRegistry();
 
   /** Open server-sent-event streams, used to push vault changes to connected clients. */
-  private readonly eventStreams = new Set<import("node:http").ServerResponse>();
+  private readonly eventStreams = new Map<import("node:http").ServerResponse, string | null>();
   /** A ceiling so a misbehaving client cannot open streams until the server runs out. */
   private static readonly MAX_EVENT_STREAMS = 64;
   private roomSweep: NodeJS.Timeout | null = null;
@@ -139,8 +139,10 @@ export class QuireServer {
   }
 
   private publish(kind: string, detail: Record<string, unknown> = {}): void {
-    const payload = `data: ${JSON.stringify({ kind, files: this.vault.list(), ...detail })}\n\n`;
-    for (const stream of this.eventStreams) {
+    for (const [stream, scope] of this.eventStreams) {
+      if (scope && typeof detail.path === "string" && detail.path !== scope) continue;
+      const files = scope ? this.vault.list().filter((path) => path === scope) : this.vault.list();
+      const payload = `data: ${JSON.stringify({ kind, files, ...detail })}\n\n`;
       try {
         stream.write(payload);
       } catch {
@@ -224,8 +226,12 @@ export class QuireServer {
       const path = url.searchParams.get("doc");
       if (!path || !isSafeDocPath(path)) return reject("400 Bad Request");
 
-      const role = this.shares.roleFor(url.searchParams.get("share"), path);
-      if (role === "denied") return reject("403 Forbidden");
+      const token = url.searchParams.get("share");
+      const share = this.shares.resolve(token);
+      if (token ? !share || !this.shareAllows(share, path) : !isLocalOwnerRequest(req)) {
+        return reject("403 Forbidden");
+      }
+      const role = share?.role ?? "edit";
 
       const isAgent = url.searchParams.get("kind") === "agent";
       wss.handleUpgrade(req, socket, head, (ws) => this.room(path).add(ws, role, isAgent));
@@ -252,6 +258,41 @@ export class QuireServer {
     const json = (body: unknown, status = 200): void => {
       res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(body));
+    };
+
+    // The app shell is public, but vault APIs require either the loopback owner URL or
+    // a capability. Share metadata is the one exception: a recipient needs it to learn
+    // what their link grants before the app requests any document data.
+    if (url.pathname === "/api/share/info") {
+      const share = this.shares.resolve(url.searchParams.get("token"));
+      if (!share) return json({ error: "This link is not valid, or has expired." }, 404);
+      json({
+        role: share.role, path: share.path, brief: share.brief,
+        requestedBy: share.requestedBy, expiresAt: share.expiresAt,
+      });
+      return;
+    }
+
+    const shareToken = url.searchParams.get("share");
+    const share = this.shares.resolve(shareToken);
+    const owner = !shareToken && isLocalOwnerRequest(req);
+    if (url.pathname.startsWith("/api/") && !owner && !share) {
+      json({ error: "A valid Quire share link is required." }, 403);
+      return;
+    }
+    const ownerOnly = (): boolean => {
+      if (owner) return true;
+      json({ error: "This action is available only from the local owner session." }, 403);
+      return false;
+    };
+    const allows = (path: string): boolean => {
+      if (owner || (share && this.shareAllows(share, path))) return true;
+      json({ error: "This share link does not grant access to that document." }, 403);
+      return false;
+    };
+    const visibleFiles = (): string[] => {
+      const files = this.vault.list();
+      return share?.path ? files.filter((path) => path === share.path) : files;
     };
 
     if (url.pathname.startsWith("/api/agent/conversation")) {
@@ -287,11 +328,11 @@ export class QuireServer {
 
     if (url.pathname === "/api/files") {
       json({
-        files: this.vault.list(),
+        files: visibleFiles(),
         epoch: this.epoch,
-        git: this.gitReady,
-        githubSearch: Boolean(this.opts.githubSearch),
-        exec: Boolean(this.opts.allowExec),
+        git: owner && this.gitReady,
+        githubSearch: owner && Boolean(this.opts.githubSearch),
+        exec: owner && Boolean(this.opts.allowExec),
         history: this.opts.history === true,
       });
       return;
@@ -300,6 +341,10 @@ export class QuireServer {
     if (url.pathname === "/api/search") {
       const query = url.searchParams.get("q") ?? "";
       const limit = Number(url.searchParams.get("limit") ?? 60);
+      if (share) {
+        json({ results: searchDocuments(this.documents().filter(({ path }) => visibleFiles().includes(path)), query, limit) });
+        return;
+      }
       const viaRipgrep = await searchVault(this.vault.root, query, limit);
       if (viaRipgrep.engine === "ripgrep") {
         // Trust an empty ripgrep result. Re-scanning every document because a query
@@ -321,13 +366,15 @@ export class QuireServer {
         res.end("event: error\ndata: too many event streams\n\n");
         return;
       }
-      res.write(`data: ${JSON.stringify({ kind: "files", files: this.vault.list() })}\n\n`);
-      this.eventStreams.add(res);
+      const scope = share?.path ?? null;
+      res.write(`data: ${JSON.stringify({ kind: "files", files: visibleFiles() })}\n\n`);
+      this.eventStreams.set(res, scope);
       req.on("close", () => this.eventStreams.delete(res));
       return;
     }
 
     if (url.pathname === "/api/registry") {
+      if (!ownerOnly()) return;
       if (!this.opts.registryPath) {
         json({ available: false, categories: [], entries: [] });
         return;
@@ -343,6 +390,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/registry/preview") {
+      if (!ownerOnly()) return;
       const entry = this.opts.registryPath
         ? findEntry(await loadRegistry(this.opts.registryPath), url.searchParams.get("id") ?? "")
         : null;
@@ -356,6 +404,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/registry/install" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const entry = this.opts.registryPath
         ? findEntry(await loadRegistry(this.opts.registryPath), url.searchParams.get("id") ?? "")
         : null;
@@ -384,6 +433,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/share" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const role = (url.searchParams.get("role") ?? "view") as ShareRole;
       if (!["view", "comment", "edit"].includes(role)) return json({ error: "Unknown role" }, 400);
 
@@ -410,28 +460,19 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/share" && req.method === "GET") {
+      if (!ownerOnly()) return;
       json({ shares: this.shares.list() });
       return;
     }
 
-    if (url.pathname === "/api/share/info") {
-      // Holding the token is the permission, so this needs no further check -- and a
-      // reviewer must be able to read the brief before they can do anything else.
-      const share = this.shares.resolve(url.searchParams.get("token"));
-      if (!share) return json({ error: "This link is not valid, or has expired." }, 404);
-      json({
-        role: share.role, path: share.path, brief: share.brief,
-        requestedBy: share.requestedBy, expiresAt: share.expiresAt,
-      });
-      return;
-    }
-
     if (url.pathname === "/api/share" && req.method === "DELETE") {
+      if (!ownerOnly()) return;
       json({ revoked: this.shares.revoke(url.searchParams.get("token") ?? "") });
       return;
     }
 
     if (url.pathname === "/api/discover/search") {
+      if (!ownerOnly()) return;
       if (!this.opts.githubSearch) return json({ hits: [], available: false });
       try {
         json({ hits: await searchGithub(url.searchParams.get("q") ?? ""), available: true });
@@ -442,6 +483,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/discover/files") {
+      if (!ownerOnly()) return;
       if (!this.opts.githubSearch) return json({ files: [] });
       try {
         json({
@@ -457,6 +499,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/discover/install" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const repo = url.searchParams.get("repo") ?? "";
       const branch = url.searchParams.get("branch") ?? "main";
       const path = url.searchParams.get("path") ?? "";
@@ -489,6 +532,7 @@ export class QuireServer {
     if (url.pathname === "/api/replay") {
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      if (!allows(path)) return;
       if (this.opts.history !== true) {
         return json(
           {
@@ -514,6 +558,7 @@ export class QuireServer {
     if (url.pathname === "/api/replay/frame") {
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      if (!allows(path)) return;
       const at = Number(url.searchParams.get("at") ?? 1);
       if (!Number.isFinite(at)) return json({ error: "at must be a number" }, 400);
       json({ text: replayFrameText(this.vault.getDoc(path).doc, at) });
@@ -523,6 +568,7 @@ export class QuireServer {
     if (url.pathname === "/api/provenance") {
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      if (!allows(path)) return;
       const handle = this.vault.getDoc(path);
       const authors = knownAuthors(handle.doc);
       json({
@@ -533,6 +579,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/policy" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
       const handle = this.vault.getDoc(path);
@@ -548,6 +595,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/drift") {
+      if (!ownerOnly()) return;
       if (!this.opts.registryPath) return json({ documents: [] });
       const index = await loadRegistry(this.opts.registryPath);
       const lock = await readLockfile(this.vault.root);
@@ -578,6 +626,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/drift/update" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const path = url.searchParams.get("doc") ?? "";
       const lock = await readLockfile(this.vault.root);
       const locked = lock.documents[path];
@@ -605,6 +654,7 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/exec" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const host = this.opts.host ?? "127.0.0.1";
       const exposed = !["127.0.0.1", "localhost", "::1"].includes(host);
       let parsed: { language?: string; source?: string; path?: string };
@@ -645,6 +695,7 @@ export class QuireServer {
     if (url.pathname === "/api/receipt") {
       const path = url.searchParams.get("doc") ?? "";
       if (!isSafeDocPath(path)) return json({ error: "Unsafe path" }, 400);
+      if (!allows(path)) return;
       const handle = this.vault.getDoc(path);
       const data = collectReceipt(handle, {
         // Replay frames are only available when history is retained.
@@ -667,16 +718,18 @@ export class QuireServer {
     }
 
     if (url.pathname === "/api/links") {
-      json(buildLinkGraph(this.documents()));
+      json(buildLinkGraph(this.documents().filter(({ path }) => visibleFiles().includes(path))));
       return;
     }
 
     if (url.pathname === "/api/history") {
+      if (!ownerOnly()) return;
       json({ commits: (await this.git?.history(40)) ?? [] });
       return;
     }
 
     if (url.pathname === "/api/snapshot" && req.method === "POST") {
+      if (!ownerOnly()) return;
       const sha = await this.git?.commit();
       json({ sha: sha ?? null });
       return;
@@ -708,15 +761,22 @@ export class QuireServer {
       return;
     }
 
-    res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
+    res.writeHead(200, {
+      "content-type": MIME[extname(file)] ?? "application/octet-stream",
+      "referrer-policy": "no-referrer",
+    });
     createReadStream(file).pipe(res);
+  }
+
+  private shareAllows(share: Share, path: string): boolean {
+    return share.path === null || share.path === path;
   }
 
   async close(): Promise<void> {
     if (this.roomSweep) clearInterval(this.roomSweep);
     this.roomSweep = null;
     await this.conversations.close();
-    for (const stream of this.eventStreams) stream.end();
+    for (const stream of this.eventStreams.keys()) stream.end();
     this.eventStreams.clear();
     this.git?.stop();
     for (const room of this.rooms.values()) room.destroy();

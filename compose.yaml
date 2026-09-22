@@ -1,8 +1,8 @@
 services:
   quire:
     build: .
-    # Bound to loopback deliberately. Quire has no authentication: anyone who can reach
-    # this port can read and edit every document. See SECURITY.md before widening it.
+    # Bound to loopback deliberately. External access needs a scoped share capability and
+    # a trusted VPN or TLS terminator; Quire itself does not provide TLS.
     ports:
       - "127.0.0.1:4321:4321"
     volumes:

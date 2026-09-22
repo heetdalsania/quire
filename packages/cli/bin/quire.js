@@ -53,8 +53,9 @@ if (args.includes("--help") || args.includes("-h")) {
     --origin-turn <id>    Exact completed delivery turn, included in the fork.
     --origin-label <text> Optional human-readable label (no session IDs).
 
-  Requests are refused unless they come from loopback or an allowed host, so a web page
-  you happen to have open cannot reach into your vault.
+  The loopback URL is the owner session. Non-loopback browser and MCP requests require a
+  scoped share capability, and requests from untrusted hosts are refused. Use HTTPS or a
+  trusted VPN when sharing because Quire does not provide TLS.
 
   No account, no signup, no telemetry. Core editing stays local. Discover and direct
   peer setup contact public services only when you choose those features.

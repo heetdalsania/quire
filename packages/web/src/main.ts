@@ -50,6 +50,15 @@ import {
 const PALETTE = ["#3b5bdb", "#c2255c", "#2f9e44", "#e8590c", "#7048e8", "#0c8599"];
 const ANIMALS = ["Otter", "Heron", "Falcon", "Marten", "Ibex", "Lynx", "Plover", "Vole"];
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)]!;
+const activeShareToken = new URLSearchParams(location.search).get("share");
+
+/** Carry a capability on every API request without teaching each feature about sharing. */
+function withShare(path: string): string {
+  if (!activeShareToken) return path;
+  const url = new URL(path, location.href);
+  url.searchParams.set("share", activeShareToken);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 // Identity is generated in the browser. No account, no signup, nothing sent anywhere.
 const me = { id: `u_${Math.random().toString(36).slice(2, 10)}`, name: pick(ANIMALS), color: pick(PALETTE), kind: "human" as const };
@@ -160,7 +169,7 @@ const agentSetup = wireAgentSetup($<HTMLButtonElement>("#connect-agent"), () => 
 
 /** Fetch JSON, surfacing server trouble in the status pill instead of throwing into the void. */
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(withShare(path), init);
   if (!res.ok) throw new Error(`${path} responded ${res.status}`);
   return (await res.json()) as T;
 }
@@ -336,7 +345,7 @@ async function searchGithubAndRender(query: string): Promise<void> {
     textContent: `Searching GitHub for "${query}"…`,
   }));
   try {
-    const res = await fetch(`/api/discover/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(withShare(`/api/discover/search?q=${encodeURIComponent(query)}`));
     const body = (await res.json()) as { hits?: GithubHit[]; error?: string };
     if (body.error) throw new Error(body.error);
     const hits = body.hits ?? [];
@@ -370,7 +379,7 @@ async function browseRepo(hit: GithubHit): Promise<void> {
   toast(`Listing Markdown in ${hit.repo}…`);
   try {
     const res = await fetch(
-      `/api/discover/files?repo=${encodeURIComponent(hit.repo)}&branch=${encodeURIComponent(hit.branch)}`,
+      withShare(`/api/discover/files?repo=${encodeURIComponent(hit.repo)}&branch=${encodeURIComponent(hit.branch)}`),
     );
     const body = (await res.json()) as { files?: Array<{ path: string; size: number }>; error?: string };
     if (body.error) throw new Error(body.error);
@@ -876,7 +885,7 @@ function attachRunButtons(): void {
       run.disabled = true;
       run.textContent = "Running…";
       try {
-        const res = await fetch("/api/exec", {
+        const res = await fetch(withShare("/api/exec"), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ language, source: block.textContent ?? "", path: current }),
@@ -937,8 +946,7 @@ async function open(path: string): Promise<void> {
   comments = new CommentStore(doc);
 
   const url = new URL(`/sync?doc=${encodeURIComponent(path)}`, location.href);
-  const shareToken = new URLSearchParams(location.search).get("share");
-  if (shareToken) url.searchParams.set("share", shareToken);
+  if (activeShareToken) url.searchParams.set("share", activeShareToken);
   url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
 
   // Local-first: the document is readable and editable from IndexedDB before -- and
@@ -1093,7 +1101,7 @@ exportBtn.onclick = () => {
       menuItem("Print", "or save as PDF", () => printDocument()),
       menuItem("Provenance receipt", "a page you can share", () => {
         // Opened rather than downloaded: the point is that it is a link.
-        window.open(`/api/receipt?doc=${encodeURIComponent(path)}`, "_blank", "noopener");
+        window.open(withShare(`/api/receipt?doc=${encodeURIComponent(path)}`), "_blank", "noopener");
       }),
     );
   });
@@ -1480,7 +1488,7 @@ wireResizer($("#rz-editor"), "editor", splitEl);
  * role attached to it is enforced by the server rather than by hiding buttons.
  */
 async function applyShareLink(): Promise<void> {
-  const token = new URLSearchParams(location.search).get("share");
+  const token = activeShareToken;
   if (!token) return;
 
   try {
@@ -1513,7 +1521,7 @@ async function applyShareLink(): Promise<void> {
 
     // Editing controls that cannot work under this role should not be offered.
     if (info.role !== "edit") {
-      for (const id of ["#suggest-btn", "#snapshot-btn", "#share-btn"]) {
+      for (const id of ["#suggest-btn", "#snapshot-btn", "#share-btn", "#connect-agent"]) {
         $<HTMLButtonElement>(id).hidden = true;
       }
     }
@@ -1568,7 +1576,7 @@ async function boot(): Promise<void> {
   else pathEl.textContent = "No Markdown files in this folder yet.";
 
   // Push, not poll: a file an agent or the registry just created should appear at once.
-  const events = new EventSource("/api/events");
+  const events = new EventSource(withShare("/api/events"));
   events.onmessage = (message) => {
     const data = JSON.parse(message.data) as { kind: string; files: string[]; path?: string };
     if (data.kind === "conversation") { if (data.path === current) void refreshConversation(); return; }

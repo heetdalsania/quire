@@ -20,7 +20,7 @@ let port: number;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "quire-share-"));
   await writeFile(join(dir, "doc.md"), "original\n", "utf8");
-  server = await QuireServer.start({ root: dir, port: 0, git: false });
+  server = await QuireServer.start({ root: dir, port: 0, git: false, allowedHosts: ["team.example"] });
   port = server.port;
 });
 afterEach(async () => {
@@ -29,14 +29,16 @@ afterEach(async () => {
 });
 
 /** Connect with an optional share token and try to write. */
-async function connectAndEdit(token: string | null, insert: string): Promise<{ text: string; open: boolean }> {
+async function connectAndEdit(token: string | null, insert: string, remote = false): Promise<{ text: string; open: boolean }> {
   const doc = new Y.Doc();
   const text = doc.getText("content");
   const url = new URL(`ws://127.0.0.1:${port}/sync`);
   url.searchParams.set("doc", "doc.md");
   if (token) url.searchParams.set("share", token);
 
-  const ws = new WebSocket(url.toString(), { headers: { Origin: `http://127.0.0.1:${port}` } });
+  const ws = new WebSocket(url.toString(), { headers: remote
+    ? { Host: "team.example", Origin: "https://team.example" }
+    : { Origin: `http://127.0.0.1:${port}` } });
   const opened = await new Promise<boolean>((resolve) => {
     ws.on("open", () => resolve(true));
     ws.on("error", () => resolve(false));
@@ -116,6 +118,43 @@ describe("share links", () => {
     expect(result.open).toBe(true);
     await sleep(300);
     expect(server.vault.getDoc("doc.md").getContent()).toContain("OWNER");
+  });
+
+  it("requires a capability on a non-loopback host", async () => {
+    expect((await connectAndEdit(null, "REMOTE ", true)).open).toBe(false);
+    const share = server.shares.create({ role: "edit", path: "doc.md" });
+    expect((await connectAndEdit(share.token, "TEAM ", true)).open).toBe(true);
+    await sleep(300);
+    expect(server.vault.getDoc("doc.md").getContent()).toContain("TEAM");
+  });
+});
+
+describe("shared HTTP access", () => {
+  const remote = { Host: "team.example", Origin: "https://team.example" };
+
+  it("does not treat an exposed app as an owner session", async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/files`, { headers: remote });
+    expect(res.status).toBe(403);
+  });
+
+  it("scopes file listing and search to the shared document", async () => {
+    await writeFile(join(dir, "private.md"), "private needle\n", "utf8");
+    await sleep(400);
+    const share = server.shares.create({ role: "edit", path: "doc.md" });
+    const query = `share=${share.token}`;
+
+    const files = await fetch(`http://127.0.0.1:${port}/api/files?${query}`, { headers: remote });
+    expect((await files.json() as { files: string[] }).files).toEqual(["doc.md"]);
+    const search = await fetch(`http://127.0.0.1:${port}/api/search?q=needle&${query}`, { headers: remote });
+    expect((await search.json() as { results: unknown[] }).results).toEqual([]);
+  });
+
+  it("keeps owner actions unavailable to edit-link holders", async () => {
+    const share = server.shares.create({ role: "edit" });
+    const res = await fetch(`http://127.0.0.1:${port}/api/share?role=edit&share=${share.token}`, {
+      method: "POST", headers: remote,
+    });
+    expect(res.status).toBe(403);
   });
 });
 

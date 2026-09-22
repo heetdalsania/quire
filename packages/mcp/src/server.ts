@@ -34,6 +34,8 @@ export interface McpOptions {
   role?: string;
   /** Defer to a human whose cursor is inside the range being edited. */
   polite?: boolean;
+  /** Capability token from a Quire share link. Required when connecting remotely. */
+  shareToken?: string;
 }
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
@@ -92,7 +94,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     }
     let session = sessions.get(path);
     if (!session) {
-      session = new AgentSession(options.serverUrl, path, author);
+      session = new AgentSession(options.serverUrl, path, author, options.shareToken);
       await session.connect();
       sessions.set(path, session);
     }
@@ -123,7 +125,9 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     };
 
   const listFiles = async (): Promise<string[]> => {
-    const res = await fetch(new URL("/api/files", options.serverUrl));
+    const url = new URL("/api/files", options.serverUrl);
+    if (options.shareToken) url.searchParams.set("share", options.shareToken);
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Quire server returned ${res.status}`);
     return ((await res.json()) as { files: string[] }).files;
   };
@@ -633,6 +637,7 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
       const url = new URL("/api/search", options.serverUrl);
       url.searchParams.set("q", query);
       if (limit) url.searchParams.set("limit", String(limit));
+      if (options.shareToken) url.searchParams.set("share", options.shareToken);
       const res = await fetch(url);
       const body = (await res.json()) as { results: Array<{ path: string; line: number; text: string }> };
       if (body.results.length === 0) return ok("No matches.");

@@ -13,8 +13,7 @@ import { spawn } from "node:child_process";
  *  - **Off unless asked for.** Requires `--allow-exec`. There is no configuration file
  *    that can turn it on by accident.
  *  - **Loopback only.** Refused outright when the server is bound beyond localhost.
- *    Quire has no authentication, so an exposed server with execution enabled would hand
- *    a shell to anyone who could reach the port.
+ *    Share capabilities grant document access, never permission to run a shell on the host.
  *  - **Never automatic.** Blocks run only when a person asks for that specific block.
  *    Opening a document runs nothing, which means a malicious document installed from
  *    Discover cannot execute itself.
@@ -66,8 +65,8 @@ export async function runBlock(
   }
   if (options.exposed) {
     throw new ExecRefused(
-      "Execution is refused while the server is reachable beyond localhost. Quire has no " +
-        "authentication, so this would hand a shell to anyone who can reach the port.",
+      "Execution is refused while the server is reachable beyond localhost. Share " +
+        "capabilities never grant permission to run a shell on the host.",
     );
   }
 

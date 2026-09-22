@@ -152,7 +152,7 @@ export class Room {
           // them; only their writes are dropped.
           if (decoding.readVarUint(decoder) === messageYjsSyncStep1) {
             writeSyncStep2(encoder, this.handle.doc, decoding.readVarUint8Array(decoder));
-          }
+          } else socket.send(this.notice("This share link is read-only."));
         } else if (this.roles.get(socket) === "comment" && !this.admitComment(message)) {
           // Comment links are enforced, not merely respected: an update that would touch
           // the prose is dropped, and the holder is told why.
