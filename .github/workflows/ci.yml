@@ -81,6 +81,8 @@ jobs:
         run: |
           mkdir -p /tmp/vault && printf '# Docker\n\nhello\n' > /tmp/vault/d.md
           docker run -d --name quire -p 4321:4321 -v /tmp/vault:/vault quire:ci
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4321/api/files && break || sleep 1; done
-          curl -fsS http://127.0.0.1:4321/api/files | grep -q d.md
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4321/ && break || sleep 1; done
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4321/api/files)" = 403
+          share=$(docker exec quire node -e "fetch('http://127.0.0.1:4321/api/share?role=view',{method:'POST'}).then(r=>r.json()).then(x=>process.stdout.write(x.token))")
+          curl -fsS "http://127.0.0.1:4321/api/files?share=$share" | grep -q d.md
           docker logs quire
