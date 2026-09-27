@@ -1565,6 +1565,7 @@ async function boot(): Promise<void> {
     })
     .catch(() => {});
   modeDiscoverBtn.hidden = !registry.available;
+  modeDiscoverBtn.disabled = !registry.available;
   if (registry.available) {
     discoverNoteEl.textContent = registry.note ?? "";
     renderCategories();
