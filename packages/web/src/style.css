@@ -500,6 +500,16 @@ button.revert::before {
   content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--agent); flex: none;
 }
 button.revert:hover { border-color: color-mix(in srgb, var(--remove) 50%, transparent); color: var(--remove); }
+.revert-history { display: grid; gap: 6px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 12px; overflow-wrap: anywhere; }
+.revert-history button { justify-self: start; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--text); padding: 5px 9px; cursor: pointer; }
+#revert-dialog { width: min(440px, calc(100vw - 24px)); padding: 24px; border: 1px solid var(--rule); border-radius: 8px; background: var(--base); color: var(--text); }
+#revert-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+#revert-dialog h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: 0; }
+#revert-dialog p { font-size: 13px; line-height: 1.5; }
+#revert-dialog label { display: grid; gap: 6px; margin: 18px 0; font-size: 13px; }
+#revert-dialog input { min-height: 34px; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit; }
+#revert-dialog form { display: flex; justify-content: end; gap: 8px; }
+#revert-dialog button { min-height: 34px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--text); padding: 5px 10px; cursor: pointer; }
 
 /* ── inline marks (authorship + suggestions) ─────────────────────────── */
 

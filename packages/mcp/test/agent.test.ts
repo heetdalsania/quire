@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as Y from "yjs";
 import { QuireServer } from "@quire/server";
 import { type Author, acceptSuggestion, committedText, insertAttributed } from "@quire/bridge";
 import { AgentSession } from "../src/session.js";
@@ -35,6 +36,23 @@ async function join_(path: string): Promise<AgentSession> {
 }
 
 describe("agent sessions", () => {
+  it("relays ongoing presence and receives human cursor awareness", async () => {
+    const s = await join_("doc.md");
+    const room = server.rooms.get("doc.md")!;
+    await expect.poll(() => (room.awareness.getStates().get(s.doc.clientID) as { user?: { name?: string } })?.user?.name).toBe("Claude");
+
+    s.awareness.setLocalStateField("working", true);
+    await expect.poll(() => (room.awareness.getStates().get(s.doc.clientID) as { working?: boolean })?.working).toBe(true);
+
+    const handle = server.vault.getDoc("doc.md");
+    room.awareness.setLocalState({
+      user: { name: "Human", kind: "human", color: "#000" },
+      cursor: { head: Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(handle.text, 4)) },
+    });
+    await expect.poll(() => s.humanCursors()).toEqual([{ name: "Human", index: 4 }]);
+    room.awareness.setLocalState(null);
+  });
+
   it("receives the document before the first edit can run", async () => {
     const s = await join_("doc.md");
     // The whole point of waiting for sync step 2: an agent that edits an empty buffer

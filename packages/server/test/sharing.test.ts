@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -127,6 +127,47 @@ describe("share links", () => {
     await sleep(300);
     expect(server.vault.getDoc("doc.md").getContent()).toContain("TEAM");
   });
+});
+
+const posixDescribe = process.platform === "win32" ? describe.skip : describe;
+posixDescribe("opt-in private share store", () => {
+  it("keeps active links and revocations across restarts", async () => {
+    const path = join(dir, "shares.json");
+    await writeFile(path, '{"shares":[]}', { mode: 0o600 });
+    const first = new ShareRegistry(path);
+    const kept = first.create({ role: "edit", path: "doc.md" });
+    const revoked = first.create({ role: "view" });
+    expect(new ShareRegistry(path).resolve(kept.token)?.role).toBe("edit");
+    expect(first.revoke(revoked.token)).toBe(true);
+    const restored = new ShareRegistry(path);
+    expect(restored.resolve(kept.token)?.path).toBe("doc.md");
+    expect(restored.resolve(revoked.token)).toBeNull();
+    expect((await readFile(path, "utf8"))).not.toContain(revoked.token);
+  });
+
+  it("refuses stores readable by others or containing invalid shares", async () => {
+    const path = join(dir, "shares.json");
+    await writeFile(path, '{"shares":[]}', { mode: 0o600 });
+    await chmod(path, 0o644);
+    expect(() => new ShareRegistry(path)).toThrow(/private regular file/);
+    await chmod(path, 0o600);
+    await writeFile(path, '{"shares":[{}]}');
+    expect(() => new ShareRegistry(path)).toThrow(/Invalid share store entry/);
+  });
+
+  it("refuses a symlink for the private share store", async () => {
+    const path = join(dir, "shares.json");
+    await writeFile(path, '{"shares":[]}', { mode: 0o600 });
+    const link = join(dir, "shares-link.json");
+    await symlink(path, link);
+    expect(() => new ShareRegistry(link)).toThrow(/private regular file/);
+  });
+});
+
+if (process.platform === "win32") it("fails closed for a private share store without verifiable file permissions", async () => {
+  const path = join(dir, "shares.json");
+  await writeFile(path, '{"shares":[]}');
+  expect(() => new ShareRegistry(path)).toThrow(/cannot be verified on Windows/);
 });
 
 describe("shared HTTP access", () => {

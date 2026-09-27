@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Wait for Discover's registry to load before enabling its tab, avoiding an early-click
+  race on slower browsers and devices.
+- Confirm applied-agent-edit reverts, record a self-reported actor, and expose durable
+  restore history to editors. Preserve pending suggestions and protected iteration logs;
+  propagate save failures as uncertain outcomes and add permission, restart, ordering and
+  cross-browser tests.
+- Verify the current share link and document scope in the agent setup dialog before enabling
+  copyable configuration. Distinguish link access from live agent presence, diagnose expired
+  links, and use a read-only sample task for view/comment capabilities. Reject unencrypted
+  remote agent setup links while retaining loopback HTTP for local use.
+- Add opt-in `--agent-activity-log` to append a basic, attributed record after each
+  committed Quire agent edit. Skip pending suggestions and manual iteration entries;
+  require the activity log to have append-only protection.
+- Add opt-in private share persistence with `--share-store`, so a supervised team vault can
+  restart without revoking its links. The store must be owner-only; the default remains
+  in-memory links that expire on restart. Add `--quick-tunnel-host-file` to reload one
+  exact temporary tunnel hostname without restarting Quire. Both file-backed options
+  fail closed on Windows, where POSIX file permissions cannot establish privacy.
+- Add an opt-in `--append-only-log` guard for progress files. Live editors and MCP agents
+  may append entries, but cannot change or remove existing `## Iteration log` content;
+  edits above the log remain collaborative. Local filesystem owners retain control.
+- Hide the sidebar setup button while an agent is live in the open document, keeping
+  its presence avatar visible; restore setup when the agent leaves or the connection drops.
+- Keep MCP agent presence alive with awareness heartbeats and receive human cursor updates
+  so agent politeness sees collaborators who are editing nearby.
 - Require scoped capabilities for all non-loopback browser and MCP vault access. Carry document
   scope through file listing, search, events, document APIs and receipts while keeping link
   creation, policy, installs, execution and snapshots local-owner-only.

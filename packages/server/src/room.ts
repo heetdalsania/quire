@@ -20,6 +20,7 @@ const MSG_EPOCH = 2;
 const MSG_NOTICE = 3;
 const SYNC_STEP_2 = 1;
 const SYNC_UPDATE = 2;
+const ITERATION_LOG = /^## Iteration log[ \t]*$/m;
 
 /** One collaborative session over a single document. */
 export class Room {
@@ -41,6 +42,8 @@ export class Room {
   constructor(
     readonly handle: DocHandle,
     private readonly epoch: string,
+    private readonly appendOnlyLog = false,
+    private readonly onAgentEdit?: (path: string, name: string, before: string, after: string) => void,
   ) {
     this.awareness = new Awareness(handle.doc);
     this.awareness.setLocalState(null);
@@ -159,6 +162,10 @@ export class Room {
           socket.send(this.notice("This link allows comments, not edits to the document."));
           return;
         } else {
+          if (this.appendOnlyLog && !this.admitAppendOnlyLog(message)) {
+            socket.send(this.notice("The iteration log is append-only. Add a new entry at the end; existing entries cannot be changed or removed."));
+            return;
+          }
           const budget = this.budgets.get(socket);
           if (budget) {
             const verdict = this.admitAgentUpdate(socket, budget, message);
@@ -169,8 +176,19 @@ export class Room {
               return;
             }
           }
+          const before = budget ? this.handle.getContent() : null;
           // `socket` as origin keeps the update from being echoed to its sender.
           readSyncMessage(decoder, encoder, this.handle.doc, socket);
+          if (before !== null) {
+            const after = this.handle.getContent();
+            if (after !== before) {
+              const names = [...(this.ownedClients.get(socket) ?? [])]
+                .map((id) => this.awareness.getStates().get(id) as { user?: { name?: string; kind?: string } } | undefined)
+                .filter((state) => state?.user?.kind === "agent" && state.user.name)
+                .map((state) => state!.user!.name!);
+              this.onAgentEdit?.(this.handle.path, names[0] ?? "Agent", before, after);
+            }
+          }
         }
         if (encoding.length(encoder) > 1) socket.send(encoding.toUint8Array(encoder));
       } else if (type === MSG_AWARENESS) {
@@ -178,6 +196,33 @@ export class Room {
       }
     } catch {
       // A malformed frame from one client must never take the room down.
+    }
+  }
+
+  /** Check a prospective CRDT update without applying it to the authoritative document. */
+  private admitAppendOnlyLog(message: Uint8Array): boolean {
+    try {
+      const decoder = decoding.createDecoder(message);
+      decoding.readVarUint(decoder);
+      const syncType = decoding.readVarUint(decoder);
+      if (syncType !== SYNC_STEP_2 && syncType !== SYNC_UPDATE) return true;
+
+      const before = this.handle.text.toString();
+      const start = before.search(ITERATION_LOG);
+      if (start === -1) return false;
+
+      const candidate = new Y.Doc();
+      try {
+        Y.applyUpdate(candidate, Y.encodeStateAsUpdate(this.handle.doc));
+        Y.applyUpdate(candidate, decoding.readVarUint8Array(decoder));
+        const after = candidate.getText("content").toString();
+        const nextStart = after.search(ITERATION_LOG);
+        return nextStart !== -1 && after.slice(nextStart).startsWith(before.slice(start));
+      } finally {
+        candidate.destroy();
+      }
+    } catch {
+      return false;
     }
   }
 

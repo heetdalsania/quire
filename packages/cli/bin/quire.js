@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unwatchFile, watchFile } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { QuireServer } from "@quire/server";
+import { readQuickTunnelHost } from "./quick-tunnel-host.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(readFileSync(resolve(here, "../package.json"), "utf8"));
@@ -36,6 +37,14 @@ if (args.includes("--help") || args.includes("-h")) {
     --host <addr>         Bind address (default 127.0.0.1, local only)
     --allow-host <name>   Additionally trust this hostname (repeatable). Needed only
                           when deliberately exposing the vault, e.g. via a tunnel.
+    --quick-tunnel-host-file <path>  Trust the single exact Quick Tunnel hostname in
+                          this local file, reloading it when the tunnel rotates.
+    --share-store <path>  Opt in to preserving share links in a private mode-600 file.
+    --append-only-log <path>  Protect an existing "## Iteration log" section in a
+                          Markdown file. Existing entries cannot be changed through Quire;
+                          new entries can only be appended at the document end. Repeatable.
+    --agent-activity-log <path>  Append a basic record after each committed agent edit.
+                          Requires the same path in --append-only-log.
     --git                 Opt in to periodic git snapshots of Markdown changed by Quire
     --no-discover         Disable the Discover tab (no outbound requests at all)
     --no-search           Keep the curated index, but disable live GitHub search
@@ -140,6 +149,40 @@ const allowedHosts = args.reduce((acc, arg, i) => {
   if (arg === "--allow-host" && args[i + 1]) acc.push(args[i + 1]);
   return acc;
 }, []);
+const quickTunnelHostFile = flag("--quick-tunnel-host-file");
+if (args.includes("--quick-tunnel-host-file") && (!quickTunnelHostFile || quickTunnelHostFile.startsWith("--"))) {
+  console.error("--quick-tunnel-host-file requires a file path");
+  process.exit(2);
+}
+let quickTunnelHost = null;
+if (quickTunnelHostFile) {
+  quickTunnelHost = readQuickTunnelHost(quickTunnelHostFile);
+  allowedHosts.push(quickTunnelHost);
+  watchFile(quickTunnelHostFile, { interval: 1000 }, () => {
+    try {
+      const next = readQuickTunnelHost(quickTunnelHostFile);
+      if (next === quickTunnelHost) return;
+      allowedHosts.splice(allowedHosts.indexOf(quickTunnelHost), 1, next);
+      quickTunnelHost = next;
+      console.log(`  trusted tunnel host changed to ${next}`);
+    } catch (error) {
+      console.error(`  keeping previous tunnel host: ${error.message}`);
+    }
+  });
+}
+const appendOnlyLogs = args.reduce((acc, arg, i) => {
+  if (arg === "--append-only-log" && args[i + 1] && !args[i + 1].startsWith("--")) acc.push(args[i + 1]);
+  return acc;
+}, []);
+if (args.includes("--append-only-log") && appendOnlyLogs.length !== args.filter((arg) => arg === "--append-only-log").length) {
+  console.error("--append-only-log requires a vault-relative Markdown path");
+  process.exit(2);
+}
+const agentActivityLog = flag("--agent-activity-log");
+if (args.includes("--agent-activity-log") && (!agentActivityLog || agentActivityLog.startsWith("--") || args.filter((arg) => arg === "--agent-activity-log").length !== 1)) {
+  console.error("--agent-activity-log requires one vault-relative Markdown path");
+  process.exit(2);
+}
 
 let server;
 try {
@@ -149,6 +192,9 @@ try {
     port: Number(flag("--port", 4321)),
     host: flag("--host", "127.0.0.1"),
     allowedHosts,
+    shareStorePath: flag("--share-store"),
+    appendOnlyLogs,
+    agentActivityLog,
     git: args.includes("--git") && !args.includes("--no-git") ? {} : false,
     // Discover is index-only: entries are fetched from their own repositories on request.
     ...(args.includes("--no-discover") || !registryPath ? {} : { registryPath }),
@@ -188,6 +234,7 @@ let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
+  if (quickTunnelHostFile) unwatchFile(quickTunnelHostFile);
   try {
     await server.close();
   } finally {

@@ -43,7 +43,6 @@ import {
   registerLocalAuthor,
   listSuggestions,
   rejectSuggestion,
-  revertAuthor,
   scrollTo,
 } from "./rail.js";
 
@@ -86,6 +85,92 @@ async function refreshConversation(): Promise<void> {
 }
 const agentsEl = $("#agents");
 const agentsSection = $("#agents-section");
+interface RevertSummary {
+  id: string;
+  agentName: string;
+  revertedBy: string;
+  revertedAt: number;
+  restoredBy: string | null;
+  restoredAt: number | null;
+  chars: number;
+}
+let revertHistory: RevertSummary[] = [];
+async function refreshReverts(path: string): Promise<void> {
+  try {
+    const result = await api<{ reverts: RevertSummary[] }>(`/api/reverts?doc=${encodeURIComponent(path)}`);
+    if (current !== path) return;
+    revertHistory = result.reverts;
+    renderRail();
+  } catch {
+    if (current === path) revertHistory = [];
+  }
+}
+
+function confirmRevert(action: "revert" | "restore", agentName: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.id = "revert-dialog";
+    const title = document.createElement("h2");
+    title.textContent = action === "revert" ? `Revert ${agentName}'s applied edits?` : `Restore ${agentName}'s edits?`;
+    const detail = document.createElement("p");
+    detail.textContent = action === "revert"
+      ? "This removes surviving text inserted by this agent. Other edits and pending suggestions stay in place. You can restore this action later."
+      : "This puts the removed text back near its original position. Later edits stay in place.";
+    const label = document.createElement("label");
+    label.textContent = "Your name (self-reported for the activity record)";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.required = true;
+    input.minLength = 2;
+    input.maxLength = 80;
+    label.append(input);
+    const form = document.createElement("form");
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.onclick = () => dialog.close();
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.textContent = action === "revert" ? "Revert edits" : "Restore edits";
+    form.append(cancel, submit);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const actor = input.value.trim();
+      if (actor.length < 2 || /[\r\n|`\x00-\x1f]/.test(actor)) {
+        input.setCustomValidity("Enter a name without control characters or | and `");
+        input.reportValidity();
+        return;
+      }
+      resolve(actor);
+      dialog.close();
+    };
+    input.oninput = () => input.setCustomValidity("");
+    dialog.onclose = () => { resolve(null); dialog.remove(); };
+    dialog.append(title, detail, label, form);
+    document.body.append(dialog);
+    dialog.showModal();
+    input.focus();
+  });
+}
+
+async function changeAgentEdits(action: "revert" | "restore", agentName: string, field: { agentId: string } | { id: string }): Promise<void> {
+  const path = current;
+  if (!path || shareRole === "view" || shareRole === "comment") return;
+  const actor = await confirmRevert(action, agentName);
+  if (!actor || current !== path) return;
+  try {
+    const response = await fetch(withShare("/api/reverts"), {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, doc: path, actor, ...field }),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Could not update agent edits");
+    await refreshReverts(path);
+    toast(action === "revert" ? "Agent edits reverted. Restore is available below." : "Agent edits restored.");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "Could not update agent edits", true);
+  }
+}
 const backlinksEl = $("#backlinks");
 const backlinksPanel = $("#backlinks-panel");
 const searchEl = $<HTMLInputElement>("#search");
@@ -839,18 +924,36 @@ function renderRail(): void {
   const agents = authorsPresent(ytext)
     .map((id) => ({ id, meta: authorRegistry.get(id) }))
     .filter((a) => a.meta?.kind === "agent");
-  agentsSection.hidden = agents.length === 0;
+  agentsSection.hidden = agents.length === 0 && revertHistory.length === 0;
+  const canChange = shareRole !== "view" && shareRole !== "comment";
   agentsEl.replaceChildren(
-    ...agents.map(({ id, meta }) => {
+    ...agents.filter(() => canChange).map(({ id, meta }) => {
       const button = document.createElement("button");
       button.className = "revert";
       button.textContent = getLocale() === "en" ? `Revert ${meta!.name}'s edits` : `${t("Revert edits")}: ${meta!.name}`;
-      button.title = "Removes only this agent's spans, leaving everyone else's text alone";
-      button.onclick = () => {
-        const removed = revertAuthor(ytext!, id);
-        if (removed) renderRail();
-      };
+      button.title = "Removes applied insertions only; requires confirmation and can be restored";
+      button.onclick = () => void changeAgentEdits("revert", meta!.name, { agentId: id });
       return button;
+    }),
+    ...revertHistory.map((record) => {
+      const row = document.createElement("div");
+      row.className = "revert-history";
+      const text = document.createElement("span");
+      const when = new Date(record.revertedAt).toLocaleString();
+      text.textContent = `${record.agentName}: ${record.chars} characters reverted by ${record.revertedBy} (self-reported), ${when}`;
+      row.append(text);
+      if (record.restoredAt === null && canChange) {
+        const restore = document.createElement("button");
+        restore.textContent = "Restore";
+        restore.title = `Restore ${record.agentName}'s reverted edits`;
+        restore.onclick = () => void changeAgentEdits("restore", record.agentName, { id: record.id });
+        row.append(restore);
+      } else if (record.restoredBy) {
+        const restored = document.createElement("span");
+        restored.textContent = `Restored by ${record.restoredBy} (self-reported)`;
+        row.append(restored);
+      }
+      return row;
     }),
   );
 }
@@ -939,6 +1042,8 @@ async function open(path: string): Promise<void> {
   doc?.destroy();
 
   current = path;
+  revertHistory = [];
+  void refreshReverts(path);
   conversationPanel.render(null, null);
   void refreshConversation();
   doc = new Y.Doc();

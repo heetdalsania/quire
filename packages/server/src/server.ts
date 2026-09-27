@@ -39,6 +39,7 @@ import { isLocalOwnerRequest, isRequestAllowed, isSafeDocPath } from "./security
 import { ShareRegistry, type Share, type ShareRole } from "./sharing.js";
 import { searchDocuments, searchVault } from "./search.js";
 import { Room } from "./room.js";
+import { listReverts, restoreAgentEdits, revertAgentEdits } from "./reverts.js";
 import { ArtifactConversations, NativeConversationProvider, parseOrigin, type ConversationOrigin, type ConversationProvider } from "@quire/agent";
 
 export interface QuireServerOptions extends VaultOptions {
@@ -53,6 +54,12 @@ export interface QuireServerOptions extends VaultOptions {
    * deliberately exposing the vault, e.g. through a tunnel.
    */
   allowedHosts?: string[];
+  /** Optional private file for preserving capability links across restarts. */
+  shareStorePath?: string;
+  /** Vault-relative Markdown paths whose Iteration log section may only grow at its end. */
+  appendOnlyLogs?: string[];
+  /** Optional append-only document receiving automatic records of committed agent edits. */
+  agentActivityLog?: string;
   /** Persist collaboration state beside the vault so it survives a restart. */
   persist?: boolean;
   /** Path to the registry index. Omit to disable Discover entirely. */
@@ -77,14 +84,15 @@ const MIME: Record<string, string> = {
 };
 
 export class QuireServer {
-  /** Capability links. In memory only, so they never outlive the session that made them. */
-  readonly shares = new ShareRegistry();
+  /** Capability links. Ephemeral unless an explicit private store is configured. */
+  readonly shares: ShareRegistry;
 
   /** Open server-sent-event streams, used to push vault changes to connected clients. */
   private readonly eventStreams = new Map<import("node:http").ServerResponse, string | null>();
   /** A ceiling so a misbehaving client cannot open streams until the server runs out. */
   private static readonly MAX_EVENT_STREAMS = 64;
   private roomSweep: NodeJS.Timeout | null = null;
+  private readonly pendingAgentEdits = new Map<string, Set<string>>();
 
   /** Identifies this process's document lineage; see Room.add. */
   readonly epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -102,6 +110,7 @@ export class QuireServer {
     readonly vault: Vault,
     private readonly opts: QuireServerOptions,
   ) {
+    this.shares = new ShareRegistry(opts.shareStorePath);
     this.git = opts.git ? new GitSnapshotter(vault, opts.git) : null;
     this.conversations = new ArtifactConversations(vault, opts.conversationProvider ?? new NativeConversationProvider(vault.root), path => this.publish("conversation", { path }));
     vault.on("doc:rename", ({ from, to }: { from: string; to: string }) => {
@@ -115,6 +124,7 @@ export class QuireServer {
     for (const event of ["doc:written", "doc:open", "doc:delete", "doc:rename"]) {
       vault.on(event, () => this.publish("files"));
     }
+    vault.on("doc:written", ({ path }: { path: string }) => this.recordAgentEdits(path));
   }
 
   /**
@@ -155,6 +165,12 @@ export class QuireServer {
     const vault = await Vault.open(options);
     const server = new QuireServer(vault, options);
     try {
+      if (options.agentActivityLog && (
+        !isSafeDocPath(options.agentActivityLog) ||
+        !options.appendOnlyLogs?.includes(options.agentActivityLog) ||
+        !vault.list().includes(options.agentActivityLog) ||
+        !/^## Iteration log[ \t]*$/m.test(vault.getDoc(options.agentActivityLog).getContent())
+      )) throw new Error("Agent activity log must be an existing append-only document with an Iteration log heading");
       await server.conversations.load();
       if (options.persist === false && server.conversations.paths().length) throw new Error("Bound native conversations require persistent collaboration state");
       await server.listen();
@@ -189,11 +205,47 @@ export class QuireServer {
   private room(path: string): Room {
     let room = this.rooms.get(path);
     if (!room) {
-      room = new Room(this.vault.getDoc(path), this.epoch);
+      room = new Room(
+        this.vault.getDoc(path), this.epoch, this.opts.appendOnlyLogs?.includes(path) ?? false,
+        (editedPath, name, before, after) => {
+          if (!this.opts.agentActivityLog) return;
+          // A manual iteration entry is itself the record; do not log the log.
+          if (editedPath === this.opts.agentActivityLog && after.startsWith(before)) return;
+          const names = this.pendingAgentEdits.get(editedPath) ?? new Set<string>();
+          names.add(name);
+          this.pendingAgentEdits.set(editedPath, names);
+        },
+      );
       this.rooms.set(path, room);
       this.conversations.attach(room);
     }
     return room;
+  }
+
+  private recordAgentEdits(path: string): void {
+    const logPath = this.opts.agentActivityLog;
+    const names = this.pendingAgentEdits.get(path);
+    if (!logPath || !names?.size) return;
+    this.pendingAgentEdits.delete(path);
+    const log = this.vault.getDoc(logPath);
+    const safe = (value: string): string => value.replace(/[\r\n|`]/g, " ").slice(0, 120);
+    const at = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+    const actor = [...names].map(safe).join(", ");
+    const entry = `${at} | ${actor} | AUTO | Committed edit to ${safe(path)} | Saved by Quire; task and checks not inferred | ${safe(path)}\n`;
+    const prefix = log.getContent().endsWith("\n") ? "" : "\n";
+    log.doc.transact(() => log.text.insert(log.text.length, prefix + entry), "quire:agent-activity");
+  }
+
+  private appendRevertAudit(actor: string, action: "REVERT" | "RESTORE", path: string, agentName: string, chars: number, id: string): void {
+    const logPath = this.opts.agentActivityLog;
+    if (!logPath) return;
+    const safe = (value: string): string => value.replace(/[\r\n|`]/g, " ").slice(0, 120);
+    const at = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+    const detail = action === "REVERT" ? "Removed" : "Restored";
+    const log = this.vault.getDoc(logPath);
+    const prefix = log.getContent().endsWith("\n") ? "" : "\n";
+    const entry = `${at} | ${safe(actor)} | ${action} | ${detail} ${chars} attributed characters from ${safe(agentName)} in ${safe(path)} | Revert ID ${id} | ${safe(path)}\n`;
+    log.doc.transact(() => log.text.insert(log.text.length, prefix + entry), "quire:revert-audit");
   }
 
   private async listen(): Promise<void> {
@@ -294,6 +346,56 @@ export class QuireServer {
       const files = this.vault.list();
       return share?.path ? files.filter((path) => path === share.path) : files;
     };
+
+    if (url.pathname === "/api/reverts") {
+      res.setHeader("Cache-Control", "no-store");
+      const path = req.method === "GET" ? url.searchParams.get("doc") : null;
+      if (req.method === "GET") {
+        if (!path || !isSafeDocPath(path)) return json({ error: "Invalid document path" }, 400);
+        if (!allows(path)) return;
+        if (!this.vault.list().includes(path)) return json({ error: "Document not found" }, 404);
+        return json({ reverts: listReverts(this.vault.getDoc(path)) });
+      }
+      if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+      if (!owner && share?.role !== "edit") return json({ error: "An Edit link is required" }, 403);
+      if (this.opts.persist === false) return json({ error: "Reversible edits require persistent collaboration state" }, 409);
+      let mutated = false;
+      try {
+        const input = JSON.parse(await readBody(req, 4096));
+        if (typeof input?.doc !== "string" || !isSafeDocPath(input.doc)) throw new Error("Invalid document path");
+        if (!allows(input.doc)) return;
+        if (!this.vault.list().includes(input.doc)) return json({ error: "Document not found" }, 404);
+        if (typeof input.actor !== "string" || !/^[^\r\n|`\x00-\x1f]{2,80}$/.test(input.actor.trim())) throw new Error("Enter your name for the audit record");
+        const actor = input.actor.trim();
+        const handle = this.vault.getDoc(input.doc);
+        const protectedStart = this.opts.appendOnlyLogs?.includes(input.doc)
+          ? Math.max(0, handle.text.toString().search(/^## Iteration log[ \t]*$/m)) : Infinity;
+        if (input.action === "revert") {
+          if (typeof input.agentId !== "string") throw new Error("Invalid agent");
+          const agent = knownAuthors(handle.doc)[input.agentId];
+          if (!agent || agent.kind !== "agent") throw new Error("Unknown agent");
+          const record = revertAgentEdits(handle, input.agentId, agent.name, actor, protectedStart);
+          mutated = true;
+          this.appendRevertAudit(actor, "REVERT", input.doc, agent.name, record.chars, record.id);
+          await this.vault.persistDocumentNow(input.doc);
+          if (this.opts.agentActivityLog) await this.vault.persistDocumentNow(this.opts.agentActivityLog);
+          return json({ record });
+        }
+        if (input.action === "restore") {
+          if (typeof input.id !== "string") throw new Error("Invalid revert ID");
+          const record = restoreAgentEdits(handle, input.id, actor, protectedStart);
+          mutated = true;
+          this.appendRevertAudit(actor, "RESTORE", input.doc, record.agentName, record.chars, record.id);
+          await this.vault.persistDocumentNow(input.doc);
+          if (this.opts.agentActivityLog) await this.vault.persistDocumentNow(this.opts.agentActivityLog);
+          return json({ record });
+        }
+        throw new Error("Invalid revert action");
+      } catch (error) {
+        if (mutated) return json({ error: "Action may have applied but could not be saved. Refresh and inspect the document before retrying." }, 500);
+        return json({ error: error instanceof SyntaxError ? "Invalid request body" : error instanceof Error ? error.message : "Revert failed" }, 400);
+      }
+    }
 
     if (url.pathname.startsWith("/api/agent/conversation")) {
       res.setHeader("Cache-Control", "no-store");
