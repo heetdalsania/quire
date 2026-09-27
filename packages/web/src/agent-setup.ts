@@ -4,6 +4,7 @@ import { t } from "./i18n.js";
 export type AgentClient = "claude" | "codex" | "cursor";
 export type AgentPlatform = "posix" | "windows";
 export interface SharedAgentOrigin { origin: string; token: string }
+export interface AgentPresence { name: string; mcpRead: boolean }
 export type AgentAccess =
   | { state: "ready"; role: "edit" | "comment" | "view" | "owner"; scope: string | null }
   | { state: "expired" | "wrong-scope" | "unavailable" };
@@ -82,7 +83,7 @@ export async function checkAgentAccess(
 }
 
 export function wireAgentSetup(button: HTMLButtonElement, state: () => {
-  path: string | null; connected: boolean; agents: string[];
+  path: string | null; connected: boolean; agents: AgentPresence[];
 }): { refresh: () => void } {
   let dialog: HTMLDialogElement | null = null;
   let client: AgentClient = "claude";
@@ -104,7 +105,8 @@ export function wireAgentSetup(button: HTMLButtonElement, state: () => {
     button.hidden = now.connected && now.agents.length > 0;
     button.textContent = t("Connect agent");
     if (status) status.textContent = !now.path ? t("No document selected") : !now.connected ? t("Connection unavailable") :
-      now.agents.length ? `${t("Agent connected")}: ${now.agents.join(", ")}` : t("No agent in this document");
+      now.agents.length ? now.agents.map((agent) =>
+        `${t(agent.mcpRead ? "MCP read completed" : "Agent connected")}: ${agent.name}`).join("; ") : t("No agent in this document");
     if (accessStatus) {
       const label = access?.state === "ready" ?
         `${t("Link verified")}: ${t(access.role === "owner" ? "Local owner" : access.role === "edit" ? "Edit access" : access.role === "comment" ? "Comment access" : "View access")}${access.scope ? ` (${access.scope})` : ""}` :

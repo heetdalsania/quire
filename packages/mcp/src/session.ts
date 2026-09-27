@@ -129,6 +129,11 @@ export class AgentSession {
     }
   }
 
+  /** Ephemeral proof that this MCP process completed a read of this document. */
+  markReadSucceeded(): void {
+    this.awareness.setLocalStateField("mcpRead", true);
+  }
+
   private send(payload: Uint8Array): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(payload);
   }

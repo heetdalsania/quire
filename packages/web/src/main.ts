@@ -249,7 +249,7 @@ const agentSetup = wireAgentSetup($<HTMLButtonElement>("#connect-agent"), () => 
   connected: statusKey === "live",
   agents: [...(provider?.awareness.getStates().values() ?? [])]
     .filter((state) => state.user?.kind === "agent")
-    .map((state) => String(state.user.name)),
+    .map((state) => ({ name: String(state.user.name), mcpRead: state.mcpRead === true })),
 }));
 
 /** Fetch JSON, surfacing server trouble in the status pill instead of throwing into the void. */
@@ -778,12 +778,13 @@ function renderPresence(): void {
   authorRegistry.set(me.id, { name: me.name, color: me.color, kind: "human" });
 
   presenceEl.replaceChildren(
-    ...[...seen.values()].map((user) => {
+    ...[...seen.entries()].map(([clientId, user]) => {
       const el = document.createElement("div");
       el.className = user.kind === "agent" ? "avatar agent" : "avatar";
       el.style.background = user.color;
       el.textContent = user.kind === "agent" ? "AI" : user.name.slice(0, 1);
-      el.title = user.kind === "agent" ? `${user.name} (agent)` : user.name;
+      const mcpRead = (provider?.awareness.getStates().get(clientId) as { mcpRead?: boolean } | undefined)?.mcpRead === true;
+      el.title = user.kind === "agent" ? `${user.name} (${t(mcpRead ? "MCP read completed" : "agent")})` : user.name;
       return el;
     }),
   );

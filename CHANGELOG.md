@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show a per-document **MCP read completed** state after a real successful `read_document`
+  tool call. Keep link verification, live presence, and read proof separate; clear the
+  proof on disconnect and do not treat the self-reported agent name as verified identity.
 - Wait for Discover's registry to load before enabling its tab, avoiding an early-click
   race on slower browsers and devices.
 - Confirm applied-agent-edit reverts, record a self-reported actor, and expose durable

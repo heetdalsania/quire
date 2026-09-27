@@ -164,7 +164,9 @@ export async function createQuireMcpServer(options: McpOptions): Promise<McpServ
     },
     guard(async ({ path, committed_only }: { path: string; committed_only?: boolean | undefined }) => {
       const session = await join(path);
-      return ok(committed_only ? committedText(session.text) : session.text.toString());
+      const content = committed_only ? committedText(session.text) : session.text.toString();
+      session.markReadSucceeded();
+      return ok(content);
     }),
   );
 
