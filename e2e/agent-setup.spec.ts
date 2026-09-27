@@ -31,15 +31,24 @@ test("setup reflects real agent presence, platform configuration and keyboard di
   expect(JSON.parse(await dialog.getByLabel("Configuration", { exact: true }).inputValue()).mcpServers.quire.command).toBe("cmd");
   await expect(dialog.getByLabel("Sample task")).toHaveValue(/计划.md/);
   await expect(page.locator("#agent-connection-status")).toHaveText("No agent in this document");
+  await expect(page.locator("#agent-access-status")).toContainText("Link verified: Local owner");
+  await expect(page.locator("#connect-agent")).toBeVisible();
   const agent = new AgentSession(base, path, { id: "setup-agent", name: "Test Agent", kind: "agent", color: "#2f9e44" });
   try {
     await agent.connect();
     await expect(page.locator("#agent-connection-status")).toContainText("Agent connected: Test Agent");
+    await expect(page.locator("#connect-agent")).toBeHidden();
+    await expect(page.locator("#presence .agent")).toHaveAttribute("title", "Test Agent (agent)");
+    await page.locator("#interface-language").selectOption("zh-CN");
+    await expect(page.locator("#connect-agent")).toBeHidden();
+    await page.locator("#interface-language").selectOption("en");
+    await expect(page.locator("#connect-agent")).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator("#search")).toBeFocused();
   } finally { agent.close(); }
-  await expect(page.locator("#agent-connection-status")).toHaveText("No agent in this document");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(page.locator("#connect-agent")).toBeFocused();
+  await expect(page.locator("#connect-agent")).toBeVisible();
+  await expect(page.locator("#connect-agent")).toHaveText("Connect agent");
 });
 
 test("multilingual human input survives undo, redo, language switches and disk persistence", async ({ page, browserName }) => {
@@ -81,6 +90,7 @@ test("Chinese navigation persists without translating content, and suggestions r
   const agent = new AgentSession(base, path, { id: "language-agent", name: "Reviewer", kind: "agent", color: "#2f9e44" });
   try {
     await agent.connect();
+    await expect(page.locator("#connect-agent")).toBeHidden();
     insertAttributed(agent.text, agent.text.length, "\n建议：保留原文。\n", { id: "language-agent", name: "Reviewer", kind: "agent", color: "#2f9e44" }, { suggestion: "language-test" });
     await expect(page.locator("#suggestions")).toContainText("建议：保留原文。");
     expect(await readFile(join(root, path), "utf8")).toBe(before);
@@ -138,8 +148,31 @@ test("shared links produce only capability-scoped agent setup", async ({ page, r
   const { token } = await response.json();
   await page.goto(`${base}/?share=${token}&doc=${encodeURIComponent(path)}`);
   await page.locator("#connect-agent").click();
+  await expect(page.locator("#agent-access-status")).toContainText(`Link verified: Edit access (${path})`);
   const config = page.getByLabel("Configuration", { exact: true });
   await expect(config).toBeVisible();
   await expect(config).toHaveValue(new RegExp(`--share ${token}`));
   await expect(config).toHaveValue(new RegExp(`--url "${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+});
+
+test("file-scoped links open only their permitted document, and expired links cannot configure agents", async ({ page, request }) => {
+  const response = await request.post(`${base}/api/share?role=view&path=${encodeURIComponent(path)}`);
+  const { token } = await response.json();
+  await page.goto(`${base}/?share=${token}&doc=other.md`);
+  await expect(page.locator("#review-banner")).toBeVisible();
+  await expect(page.locator("#connect-agent")).toBeVisible();
+  await page.locator("#connect-agent").click();
+  await expect(page.locator("#agent-access-status")).toHaveText(`Link verified: View access (${path})`);
+  await expect(page.getByLabel("Sample task")).toHaveValue(/Do not edit the document/);
+
+  await page.goto(`${base}/?share=abcdefghijklmnopqrstuvwx&doc=${encodeURIComponent(path)}`);
+  await page.locator("#connect-agent").click();
+  await expect(page.locator("#agent-access-status")).toHaveText("Link expired or revoked");
+  await expect(page.getByRole("button", { name: "Copy configuration" })).toBeDisabled();
+});
+
+test("share menu warns that a localhost invitation cannot reach teammates", async ({ page }) => {
+  await page.goto(`${base}/?doc=${encodeURIComponent(path)}`);
+  await page.locator("#share-btn").click();
+  await expect(page.getByText("This localhost link works only on this computer.", { exact: false })).toBeVisible();
 });
