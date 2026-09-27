@@ -52,6 +52,14 @@ it("shows a scoped remote agent only the shared document", async () => {
   expect(JSON.stringify(listed.content)).not.toContain("private.md");
   const read = await client.callTool({ name: "read_document", arguments: { path: "private.md" } });
   expect(read.isError).toBe(true);
+  expect(server.rooms.has("private.md")).toBe(false);
+  const permitted = await client.callTool({ name: "read_document", arguments: { path: "doc.md" } });
+  expect(permitted.isError).not.toBe(true);
+  expect(JSON.stringify(permitted.content)).toContain("Original sentence.");
+  const room = server.rooms.get("doc.md")!;
+  await expect.poll(() => [...room.awareness.getStates().values()].some((state) =>
+    (state as { user?: { kind?: string }; mcpRead?: boolean }).user?.kind === "agent" &&
+    (state as { mcpRead?: boolean }).mcpRead === true)).toBe(true);
 });
 
 it("rejects malformed arguments over the actual MCP transport", async () => {

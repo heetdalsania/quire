@@ -39,6 +39,9 @@ test("setup reflects real agent presence, platform configuration and keyboard di
     await expect(page.locator("#agent-connection-status")).toContainText("Agent connected: Test Agent");
     await expect(page.locator("#connect-agent")).toBeHidden();
     await expect(page.locator("#presence .agent")).toHaveAttribute("title", "Test Agent (agent)");
+    agent.markReadSucceeded();
+    await expect(page.locator("#agent-connection-status")).toHaveText("MCP read completed: Test Agent");
+    await expect(page.locator("#presence .agent")).toHaveAttribute("title", "Test Agent (MCP read completed)");
     await page.locator("#interface-language").selectOption("zh-CN");
     await expect(page.locator("#connect-agent")).toBeHidden();
     await page.locator("#interface-language").selectOption("en");
@@ -49,6 +52,7 @@ test("setup reflects real agent presence, platform configuration and keyboard di
   } finally { agent.close(); }
   await expect(page.locator("#connect-agent")).toBeVisible();
   await expect(page.locator("#connect-agent")).toHaveText("Connect agent");
+  await expect(page.locator("#presence .agent")).toHaveCount(0);
 });
 
 test("multilingual human input survives undo, redo, language switches and disk persistence", async ({ page, browserName }) => {

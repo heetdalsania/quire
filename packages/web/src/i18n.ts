@@ -28,6 +28,7 @@ const chinese: Record<string, string> = {
   "Copy configuration": "复制配置", "Sample task": "示例任务", "Copy task": "复制任务",
   "Copied": "已复制", "Copy failed": "复制失败", "Close": "关闭",
   "No agent in this document": "此文档暂无智能体", "Agent connected": "智能体已连接",
+  "MCP read completed": "MCP 已完成读取",
   "No document selected": "未选择文档", "Connection unavailable": "连接不可用",
   "Localhost session required": "需要本机 localhost 会话",
   "Check link": "检查链接", "Checking link": "正在检查链接", "Link verified": "链接已验证",

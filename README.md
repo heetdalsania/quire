@@ -140,8 +140,9 @@ In the development build, **Connect agent** in the vault sidebar generates confi
 Claude Code, Codex, or Cursor using the current server. Local owner sessions receive local setup;
 edit-share sessions receive configuration containing that share's scoped capability. Select your
 platform, copy the configuration into your client, then restart/reload that client and send the
-sample task. The status indicates an agent's presence in the selected document, not whether a
-model account is configured. This helper does not execute commands or contact an AI provider.
+sample task. The setup status distinguishes live agent presence from a successful `read_document`
+call on that document. The read proof is ephemeral and the agent name is self-reported; neither
+verifies a human identity or model account. This helper does not execute commands or contact an AI provider.
 On mobile, open **Files** to reach the sidebar.
 
 The development build also includes a persistent language selector with an experimental Simplified

@@ -26,7 +26,9 @@ network service or keep a sleeping/offline host available.
    configuration contains the share credential; do not paste it into a public prompt,
    repository, screenshot, or chat.
 4. Ask the agent to read the document through Quire MCP. Its presence in that document
-   confirms it joined the live editor. A successful read verifies the actual MCP path.
+   confirms it joined the live editor. The **MCP read completed** status confirms that
+   its MCP process completed `read_document` for this document; it clears when that agent
+   disconnects. Agent names are self-reported, not verified identities.
    View/comment links produce a read-only sample task; an **Edit** link is required for
    document changes.
 

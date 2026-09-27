@@ -115,6 +115,9 @@ and permitted document list before offering a copyable configuration. It reports
 and view/comment/edit scope without exposing the capability in the status text. This is a
 browser-side access check, **not** proof that an MCP client can complete a tool call. The
 separate agent-presence status becomes connected only when the agent joins the open document.
+A separate **MCP read completed** status appears only after that agent's `read_document`
+tool succeeds for the open document. It is ephemeral and does not verify the agent's
+self-reported name or a human's identity.
 A view/comment link produces a read-only sample task; use an edit link for writing.
 
 An agent using a file-scoped link can list, search and join only that file. A whole-vault edit link
