@@ -6,7 +6,8 @@
   race on slower browsers and devices.
 - Confirm applied-agent-edit reverts, record a self-reported actor, and expose durable
   restore history to editors. Preserve pending suggestions and protected iteration logs;
-  add permission, restart, ordering and cross-browser tests.
+  propagate save failures as uncertain outcomes and add permission, restart, ordering and
+  cross-browser tests.
 - Verify the current share link and document scope in the agent setup dialog before enabling
   copyable configuration. Distinguish link access from live agent presence, diagnose expired
   links, and use a read-only sample task for view/comment capabilities. Reject unencrypted

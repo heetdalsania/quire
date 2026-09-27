@@ -78,6 +78,8 @@ An editor can revert surviving agent insertions after a confirmation and a self-
 name, then use **Restore** from the same panel, including after a refresh or restart.
 View/comment links cannot perform either action. Quire saves the restoration record
 before reporting success; keep persistent collaboration state enabled (the default).
+If saving fails after an edit, Quire reports an uncertain outcome; refresh and inspect the
+document before retrying.
 The recorded name is not a verified identity, and revert does not reconstruct text
 the agent previously deleted. With `--agent-activity-log`, revert and restore add
 separate server-timestamped iteration entries. Pending suggestions remain under

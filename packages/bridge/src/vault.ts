@@ -240,6 +240,15 @@ export class Vault extends EventEmitter {
     await this.queueStateSave(relPath, true);
   }
 
+  /** Write a document and its collaboration state, propagating either failure. */
+  async persistDocumentNow(relPath: string): Promise<void> {
+    const timer = this.writeTimers.get(relPath);
+    if (timer) clearTimeout(timer);
+    this.writeTimers.delete(relPath);
+    await this.writeNow(relPath);
+    await this.saveStateNow(relPath);
+  }
+
   async close(): Promise<void> {
     await this.flush();
     // Save state before shutting down, or the last edits of a session are the ones lost.

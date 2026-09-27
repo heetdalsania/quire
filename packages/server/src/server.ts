@@ -359,6 +359,7 @@ export class QuireServer {
       if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
       if (!owner && share?.role !== "edit") return json({ error: "An Edit link is required" }, 403);
       if (this.opts.persist === false) return json({ error: "Reversible edits require persistent collaboration state" }, 409);
+      let mutated = false;
       try {
         const input = JSON.parse(await readBody(req, 4096));
         if (typeof input?.doc !== "string" || !isSafeDocPath(input.doc)) throw new Error("Invalid document path");
@@ -374,21 +375,24 @@ export class QuireServer {
           const agent = knownAuthors(handle.doc)[input.agentId];
           if (!agent || agent.kind !== "agent") throw new Error("Unknown agent");
           const record = revertAgentEdits(handle, input.agentId, agent.name, actor, protectedStart);
+          mutated = true;
           this.appendRevertAudit(actor, "REVERT", input.doc, agent.name, record.chars, record.id);
-          await this.vault.flush();
-          await this.vault.saveStateNow(input.doc);
+          await this.vault.persistDocumentNow(input.doc);
+          if (this.opts.agentActivityLog) await this.vault.persistDocumentNow(this.opts.agentActivityLog);
           return json({ record });
         }
         if (input.action === "restore") {
           if (typeof input.id !== "string") throw new Error("Invalid revert ID");
           const record = restoreAgentEdits(handle, input.id, actor, protectedStart);
+          mutated = true;
           this.appendRevertAudit(actor, "RESTORE", input.doc, record.agentName, record.chars, record.id);
-          await this.vault.flush();
-          await this.vault.saveStateNow(input.doc);
+          await this.vault.persistDocumentNow(input.doc);
+          if (this.opts.agentActivityLog) await this.vault.persistDocumentNow(this.opts.agentActivityLog);
           return json({ record });
         }
         throw new Error("Invalid revert action");
       } catch (error) {
+        if (mutated) return json({ error: "Action may have applied but could not be saved. Refresh and inspect the document before retrying." }, 500);
         return json({ error: error instanceof SyntaxError ? "Invalid request body" : error instanceof Error ? error.message : "Revert failed" }, 400);
       }
     }

@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocStore, insertAttributed, registerAuthor } from "@quire/bridge";
 import { QuireServer } from "../src/index.js";
 
@@ -40,12 +40,15 @@ describe("reversible applied agent edits", () => {
     const { record } = await response.json() as { record: { id: string; revertedBy: string } };
     expect(record.revertedBy).toBe("Heet");
     expect(server.vault.getDoc("doc.md").getContent()).toBe("Base\n");
+    expect(await readFile(join(dir, "doc.md"), "utf8")).toBe("Base\n");
     expect(server.vault.getDoc("progress.md").getContent()).toContain("Heet | REVERT");
+    expect(await readFile(join(dir, "progress.md"), "utf8")).toContain("Heet | REVERT");
     expect(server.vault.getDoc("progress.md").getContent()).toContain("old entry\n");
     expect(await new DocStore({ root: dir }).load("doc.md")).not.toBeNull();
     const restore = await request("restore", "Arun", { id: record.id }, edit.token);
     expect(restore.status).toBe(200);
     expect(server.vault.getDoc("doc.md").getContent()).toContain("Agent line");
+    expect(await readFile(join(dir, "doc.md"), "utf8")).toContain("Agent line");
     expect(server.vault.getDoc("progress.md").getContent()).toContain("Arun | RESTORE");
     expect((await request("restore", "Arun", { id: record.id }, edit.token)).status).toBe(400);
   });
@@ -60,5 +63,13 @@ describe("reversible applied agent edits", () => {
     expect((await history.json() as { reverts: Array<{ id: string }> }).reverts[0]?.id).toBe(record.id);
     expect((await request("restore", "Heet", { id: record.id })).status).toBe(200);
     expect(server.vault.getDoc("doc.md").getContent()).toContain("Agent line");
+  });
+
+  it("reports an uncertain outcome if persistence fails after mutation", async () => {
+    vi.spyOn(server.vault, "persistDocumentNow").mockRejectedValueOnce(new Error("disk unavailable"));
+    const response = await request("revert", "Heet", { agentId: agent.id });
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: expect.stringMatching(/may have applied.*Refresh/) });
+    expect(server.vault.getDoc("doc.md").getContent()).toBe("Base\n");
   });
 });
