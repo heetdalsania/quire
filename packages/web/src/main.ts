@@ -1234,8 +1234,11 @@ shareBtn.onclick = () => {
 
     panel.append(create, field, hint(
       "Anyone with the link gets that access — there are no accounts, so the link is the key. " +
-      "View is enforced by the server. Links die when the server stops.",
+      "The host must stay online. Links expire, can be revoked, and normally stop working after a restart.",
     ));
+    if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+      panel.append(hint("This localhost link works only on this computer. For teammates, use a private network or HTTPS tunnel before creating the link."));
+    }
 
     panel.append(document.createElement("hr"), heading("Request a review"));
     panel.append(menuItem("Ask someone to review this", "no account needed", () => void requestReview()));
@@ -1521,7 +1524,7 @@ async function applyShareLink(): Promise<void> {
 
     // Editing controls that cannot work under this role should not be offered.
     if (info.role !== "edit") {
-      for (const id of ["#suggest-btn", "#snapshot-btn", "#share-btn", "#connect-agent"]) {
+      for (const id of ["#suggest-btn", "#snapshot-btn", "#share-btn"]) {
         $<HTMLButtonElement>(id).hidden = true;
       }
     }
@@ -1562,6 +1565,7 @@ async function boot(): Promise<void> {
     })
     .catch(() => {});
   modeDiscoverBtn.hidden = !registry.available;
+  modeDiscoverBtn.disabled = !registry.available;
   if (registry.available) {
     discoverNoteEl.textContent = registry.note ?? "";
     renderCategories();

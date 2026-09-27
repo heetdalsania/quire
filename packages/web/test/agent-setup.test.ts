@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentConfiguration, localAgentOrigin, sampleTask, sharedAgentOrigin } from "../src/agent-setup.js";
+import { agentConfiguration, checkAgentAccess, localAgentOrigin, sampleTask, sharedAgentOrigin } from "../src/agent-setup.js";
 import { resolveLocale } from "../src/i18n.js";
 
 describe("local agent setup", () => {
@@ -28,6 +28,11 @@ describe("local agent setup", () => {
     expect(command).toContain('--url "https://quire.example"');
     expect(command).toContain(`--share ${token}`);
   });
+  it("rejects unencrypted remote share links but permits local HTTP tests", () => {
+    const token = "abcdefghijklmnopqrstuvwx";
+    expect(sharedAgentOrigin(`http://quire.example/?share=${token}`)).toBeNull();
+    expect(sharedAgentOrigin(`http://127.0.0.1:4321/?share=${token}`)?.token).toBe(token);
+  });
   it.each(["short", "spaces are unsafe", "../../escape", ""])("rejects invalid share token %s", (token) => {
     expect(sharedAgentOrigin(`https://quire.example/?share=${encodeURIComponent(token)}`)).toBeNull();
     expect(() => agentConfiguration("codex", "posix", "https://quire.example", token || undefined)).toThrow();
@@ -37,6 +42,29 @@ describe("local agent setup", () => {
     expect(sampleTask(path)).toContain(JSON.stringify(path));
     expect(sampleTask(path)).toContain("suggest=true");
     expect(sampleTask(path)).toContain("Do not edit files directly");
+  });
+});
+
+describe("agent link check", () => {
+  const token = "abcdefghijklmnopqrstuvwx";
+  const href = `https://quire.example/?share=${token}`;
+  it("checks share metadata and permitted files without invoking a model or writing", async () => {
+    const calls: string[] = [];
+    const request = (async (url: string) => {
+      calls.push(url);
+      return Response.json(url.startsWith("/api/share/info") ? { role: "comment", path: "plan.md" } : { files: ["plan.md"] });
+    }) as typeof fetch;
+    expect(await checkAgentAccess(href, "plan.md", request)).toEqual({ state: "ready", role: "comment", scope: "plan.md" });
+    expect(calls).toEqual([`/api/share/info?token=${token}`, `/api/files?share=${token}`]);
+  });
+  it("distinguishes expired links, wrong document scope, and unreachable hosts", async () => {
+    const expired = (async () => Response.json({ error: "expired" }, { status: 404 })) as typeof fetch;
+    expect(await checkAgentAccess(href, "plan.md", expired)).toEqual({ state: "expired" });
+    const wrongScope = (async (url: string) => Response.json(url.startsWith("/api/share/info") ?
+      { role: "edit", path: "other.md" } : { files: ["other.md"] })) as typeof fetch;
+    expect(await checkAgentAccess(href, "plan.md", wrongScope)).toEqual({ state: "wrong-scope" });
+    const unavailable = (async () => { throw new TypeError("network unavailable"); }) as typeof fetch;
+    expect(await checkAgentAccess(href, "plan.md", unavailable)).toEqual({ state: "unavailable" });
   });
 });
 

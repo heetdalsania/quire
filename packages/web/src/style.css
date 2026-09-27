@@ -255,7 +255,7 @@ main { grid-column: 3; display: flex; flex-direction: column; min-width: 0; min-
   border-radius: 4px; padding: 10px; background: var(--surface); color: var(--text);
   font: 12px/1.5 monospace; overflow-wrap: anywhere; letter-spacing: 0;
 }
-#agent-connection-status { min-height: 24px; overflow-wrap: anywhere; font-size: 13px; }
+#agent-connection-status, #agent-access-status { min-height: 24px; overflow-wrap: anywhere; font-size: 13px; }
 #agent-setup button { min-height: 36px; cursor: pointer; }
 #agent-setup button:disabled { opacity: .5; cursor: default; }
 #agent-setup select { width: 100%; min-width: 0; }
