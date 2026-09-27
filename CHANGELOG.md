@@ -18,7 +18,8 @@
 - Add opt-in private share persistence with `--share-store`, so a supervised team vault can
   restart without revoking its links. The store must be owner-only; the default remains
   in-memory links that expire on restart. Add `--quick-tunnel-host-file` to reload one
-  exact temporary tunnel hostname without restarting Quire.
+  exact temporary tunnel hostname without restarting Quire. Both file-backed options
+  fail closed on Windows, where POSIX file permissions cannot establish privacy.
 - Add an opt-in `--append-only-log` guard for progress files. Live editors and MCP agents
   may append entries, but cannot change or remove existing `## Iteration log` content;
   edits above the log remain collaborative. Local filesystem owners retain control.

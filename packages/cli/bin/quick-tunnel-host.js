@@ -3,6 +3,9 @@ import { dirname } from "node:path";
 
 /** Read one exact Quick Tunnel hostname from a locally controlled file. */
 export function readQuickTunnelHost(path) {
+  if (process.platform === "win32") {
+    throw new Error("Private host-file permissions cannot be verified on Windows; use --allow-host with a fixed hostname");
+  }
   const parent = lstatSync(dirname(path));
   const stat = lstatSync(path);
   if (!parent.isDirectory() || (parent.mode & 0o022) !== 0 ||

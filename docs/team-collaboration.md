@@ -58,6 +58,8 @@ must not be writable by other local users. This avoids restarting Quire when a t
 rotates, but the public URL still changes. Teammates must learn the new address and
 reload MCP clients using the old one. Quick Tunnels are for testing and have no uptime
 guarantee; a stable hostname requires a more durable hosting arrangement.
+The host-file option is available only on macOS/Linux, where Quire can verify the file's
+owner and permissions. On Windows, use an explicitly configured fixed `--allow-host`.
 
 Normally, restarting Quire invalidates every share link. A supervised team host may
 opt in to `--share-store /private/path/shares.json` to preserve links across restarts.
@@ -65,6 +67,9 @@ Create the JSON file with `{ "shares": [] }`, set mode `600`, and keep its paren
 non-writable by other users. It contains live credentials: never commit, publish, or
 share it. Revocations are persisted too. Without this flag, the safer in-memory default
 is unchanged.
+Private share-store permission checks are available only on macOS/Linux. On Windows,
+Quire refuses `--share-store` rather than guessing whether the file ACL is private;
+the default in-memory share links still work.
 
 For a team progress file, `--append-only-log progress.md --agent-activity-log progress.md`
 also records each committed Quire MCP agent edit in its `## Iteration log` after the source

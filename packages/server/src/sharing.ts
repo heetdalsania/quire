@@ -33,6 +33,9 @@ export class ShareRegistry {
 
   constructor(private readonly storePath?: string) {
     if (!storePath) return;
+    if (process.platform === "win32") {
+      throw new Error("Private share-store permissions cannot be verified on Windows; --share-store is unavailable there");
+    }
     const parent = lstatSync(dirname(storePath));
     if (!parent.isDirectory() || (parent.mode & 0o022) !== 0 || (process.getuid && parent.uid !== process.getuid())) {
       throw new Error("Share store directory must be owned by the current user and not writable by others");

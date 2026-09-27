@@ -129,7 +129,8 @@ describe("share links", () => {
   });
 });
 
-describe("opt-in private share store", () => {
+const posixDescribe = process.platform === "win32" ? describe.skip : describe;
+posixDescribe("opt-in private share store", () => {
   it("keeps active links and revocations across restarts", async () => {
     const path = join(dir, "shares.json");
     await writeFile(path, '{"shares":[]}', { mode: 0o600 });
@@ -161,6 +162,12 @@ describe("opt-in private share store", () => {
     await symlink(path, link);
     expect(() => new ShareRegistry(link)).toThrow(/private regular file/);
   });
+});
+
+if (process.platform === "win32") it("fails closed for a private share store without verifiable file permissions", async () => {
+  const path = join(dir, "shares.json");
+  await writeFile(path, '{"shares":[]}');
+  expect(() => new ShareRegistry(path)).toThrow(/cannot be verified on Windows/);
 });
 
 describe("shared HTTP access", () => {
