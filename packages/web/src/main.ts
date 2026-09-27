@@ -1234,7 +1234,7 @@ shareBtn.onclick = () => {
 
     panel.append(create, field, hint(
       "Anyone with the link gets that access — there are no accounts, so the link is the key. " +
-      "The host must stay online; links may survive restarts only when share persistence is enabled.",
+      "The host must stay online. Links expire, can be revoked, and normally stop working after a restart.",
     ));
     if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
       panel.append(hint("This localhost link works only on this computer. For teammates, use a private network or HTTPS tunnel before creating the link."));

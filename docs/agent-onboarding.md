@@ -33,4 +33,4 @@ network service or keep a sleeping/offline host available.
 Quire itself does not charge for creating a link. A tunnel, always-on host, and any AI
 model used by the teammate's client are separate services with their own terms and costs.
 No setup step here signs up for one automatically. Revoking a link immediately removes
-its access; without an opt-in private share store, a server restart also invalidates links.
+its access. In this release, a server restart also invalidates links.
