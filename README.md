@@ -118,6 +118,8 @@ inserted and 30 deleted lines after an untouched Google Docs import/export round
 | **Review requests** | Send a link with a brief. The reviewer comments without an account, and comment-only is enforced by the server rather than by hiding the editor |
 | **Suggesting mode** | People get the same suggest mode agents have. Your edits become proposals and stay off disk until accepted |
 | **Share links** | Capability links scoped to a file or the vault, with view / comment / edit. External browser and MCP access requires a capability; scope and role are enforced server-side |
+| **Append-only progress logs** | Start with `--append-only-log Covenant-Progress.md` to protect an existing `## Iteration log` section from edits through Quire while allowing new entries at the end. The vault owner can still change the file directly on disk |
+| **Reversible agent edits** | Confirm a revert of applied agent insertions, record a self-reported actor, and restore the removed text later. Pending suggestions stay in the separate review flow |
 | **Export** | Markdown, self-contained HTML, plain text, copy-with-formatting for pasting into Docs, and print or save as PDF |
 | **Typography** | Prose and editor typefaces, size, leading, measure, theme, and a focus mode. Display only — never a byte of the file |
 | **GitHub search** | Search GitHub from Discover for anything the curated index misses, then pick which Markdown file to bring across |

@@ -103,6 +103,7 @@ export class Vault extends EventEmitter {
   /** Documents whose saved state is behind the live one. */
   private readonly dirtyState = new Set<string>();
   private stateTimer: NodeJS.Timeout | null = null;
+  private stateWrite: Promise<void> = Promise.resolve();
 
   private constructor(options: VaultOptions) {
     super();
@@ -232,12 +233,20 @@ export class Vault extends EventEmitter {
     }
   }
 
+  /** Persist one document's CRDT metadata before an audited action reports success. */
+  async saveStateNow(relPath: string): Promise<void> {
+    if (!this.store) throw new Error("Persistent collaboration state is required");
+    this.dirtyState.delete(relPath);
+    await this.queueStateSave(relPath, true);
+  }
+
   async close(): Promise<void> {
     await this.flush();
     // Save state before shutting down, or the last edits of a session are the ones lost.
     if (this.stateTimer) clearTimeout(this.stateTimer);
     this.stateTimer = null;
     await this.flushState();
+    await this.stateWrite;
     this.closed = true;
     for (const { timer } of this.pendingUnlinks.values()) clearTimeout(timer);
     this.pendingUnlinks.clear();
@@ -295,12 +304,26 @@ export class Vault extends EventEmitter {
       const handle = this.handles.get(path);
       if (!handle || handle.deleted) continue;
       try {
-        const saved = await this.store.save(path, handle.doc);
-        if (!saved) this.emit("state:skipped", { path, reason: "too-large" });
+        await this.queueStateSave(path, false);
       } catch (error) {
         this.emit("error", error);
       }
     }
+  }
+
+  private queueStateSave(path: string, required: boolean): Promise<void> {
+    const store = this.store;
+    const handle = this.handles.get(path);
+    if (!store || !handle || handle.deleted) return Promise.reject(new Error("Document state cannot be saved"));
+    const write = this.stateWrite.catch(() => {}).then(async () => {
+      const saved = await store.save(path, handle.doc);
+      if (!saved) {
+        if (required) throw new Error("Document state is too large to save safely");
+        this.emit("state:skipped", { path, reason: "too-large" });
+      }
+    });
+    this.stateWrite = write.catch(() => {});
+    return write;
   }
 
   private track(p: Promise<void>): void {

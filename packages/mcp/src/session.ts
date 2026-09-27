@@ -1,7 +1,7 @@
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import WebSocket from "ws";
-import { Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 import { readSyncMessage, writeSyncStep1, writeUpdate } from "y-protocols/sync";
 import * as Y from "yjs";
 import { type AgentPolicy, type Author, readPolicy, registerAuthor, registerRun, newRunId } from "@quire/bridge";
@@ -37,6 +37,13 @@ export class AgentSession {
   ) {
     this.text = this.doc.getText("content");
     this.awareness = new Awareness(this.doc);
+    this.awareness.on("update", ({ added, updated, removed }: Record<string, number[]>) => {
+      if (![...(added ?? []), ...(updated ?? []), ...(removed ?? [])].includes(this.doc.clientID)) return;
+      const enc = encoding.createEncoder();
+      encoding.writeVarUint(enc, MSG_AWARENESS);
+      encoding.writeVarUint8Array(enc, encodeAwarenessUpdate(this.awareness, [this.doc.clientID]));
+      this.send(encoding.toUint8Array(enc));
+    });
   }
 
   async connect(timeoutMs = 8000): Promise<void> {
@@ -78,6 +85,10 @@ export class AgentSession {
           return;
         }
         if (type === MSG_EPOCH) return;
+        if (type === MSG_AWARENESS) {
+          applyAwarenessUpdate(this.awareness, decoding.readVarUint8Array(decoder), this);
+          return;
+        }
         if (type === MSG_SYNC) {
           encoding.writeVarUint(enc, MSG_SYNC);
           const step = readSyncMessage(decoder, enc, this.doc, this);
@@ -116,10 +127,6 @@ export class AgentSession {
         head: Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(this.text, cursor.head)),
       });
     }
-    const enc = encoding.createEncoder();
-    encoding.writeVarUint(enc, MSG_AWARENESS);
-    encoding.writeVarUint8Array(enc, encodeAwarenessUpdate(this.awareness, [this.doc.clientID]));
-    this.send(encoding.toUint8Array(enc));
   }
 
   private send(payload: Uint8Array): void {

@@ -16,6 +16,12 @@ go to the ignored `tools/recorder/output` directory, or `OUT_DIR` when supplied.
 use scripted input through real editing sessions, not live model responses. Captions disclose
 this. The recorder asserts the visible results and checks that unaccepted suggestions stay off disk.
 
+For the hackathon collaboration post, run `node tools/recorder/team-collaboration.mjs` after
+building. It produces `quire-team-live.gif` (two browser collaborators and two agent sessions)
+and `quire-team-progress.gif` (an MCP task update, dated append, and refused rewrite). Both use
+synthetic files in a temporary vault; the progress clip is labeled as a development preview.
+The recorder checks the committed file, not just the editor's pending text.
+
 ```bash
 # 1. Build the application
 npm run build
