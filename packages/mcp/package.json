@@ -18,16 +18,16 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@quire/bridge": "*",
-    "lib0": "^0.2.99",
-    "ws": "^8.18.0",
+    "lib0": "^0.2.119",
+    "ws": "^8.22.0",
     "y-protocols": "^1.0.6",
-    "yjs": "^13.6.21",
-    "zod": "^4.6.5",
+    "yjs": "^13.6.33",
+    "zod": "^4.6.7",
     "@quire/server": "*"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.18.2"
   }
 }
