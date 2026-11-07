@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -210,5 +210,40 @@ describe("share registry", () => {
     const shares = new ShareRegistry();
     const share = shares.create({ role: "comment", path: null });
     expect(shares.roleFor(share.token, "anything.md")).toBe("comment");
+  });
+});
+
+describe.skipIf(process.platform === "win32")("first run of a private share store", () => {
+  let parent: string;
+  beforeEach(async () => {
+    parent = await mkdtemp(join(tmpdir(), "quire-store-"));
+    await chmod(parent, 0o700);
+  });
+  afterEach(async () => { await rm(parent, { recursive: true, force: true }); });
+
+  it("creates a missing store as a private file, and keeps links across a restart", async () => {
+    const path = join(parent, "shares.json");
+    const created = new ShareRegistry(path);
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const share = created.create({ role: "edit", path: null, ttlMs: null, label: "whole vault" });
+    expect(new ShareRegistry(path).resolve(share.token)?.role).toBe("edit");
+  });
+
+  it("will not create one in a directory other users can write to", async () => {
+    await chmod(parent, 0o777);
+    const path = join(parent, "shares.json");
+    expect(() => new ShareRegistry(path)).toThrow(/not writable by others/);
+    await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not follow a symlink planted at the store path", async () => {
+    const target = join(parent, "elsewhere.json");
+    await symlink(target, join(parent, "shares.json"));
+    expect(() => new ShareRegistry(join(parent, "shares.json"))).toThrow(/private regular file/);
+    await expect(stat(target)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("names the problem when the directory is missing", () => {
+    expect(() => new ShareRegistry(join(parent, "absent", "shares.json"))).toThrow(/directory does not exist/);
   });
 });

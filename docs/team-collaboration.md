@@ -63,8 +63,8 @@ owner and permissions. On Windows, use an explicitly configured fixed `--allow-h
 
 Normally, restarting Quire invalidates every share link. A supervised team host may
 opt in to `--share-store /private/path/shares.json` to preserve links across restarts.
-Create the JSON file with `{ "shares": [] }`, set mode `600`, and keep its parent directory
-non-writable by other users. It contains live credentials: never commit, publish, or
+Quire creates the file with mode `600` on first run; its parent directory must already exist
+and be non-writable by other users. It contains live credentials: never commit, publish, or
 share it. Revocations are persisted too. Without this flag, the safer in-memory default
 is unchanged.
 Private share-store permission checks are available only on macOS/Linux. On Windows,

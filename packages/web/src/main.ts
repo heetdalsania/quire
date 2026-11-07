@@ -95,14 +95,22 @@ interface RevertSummary {
   chars: number;
 }
 let revertHistory: RevertSummary[] = [];
+/** Stays on screen until dismissed: an unknown outcome outlives any toast. */
+let revertNotice: string | null = null;
+let revertRefresh = 0;
+const UNCONFIRMED_REVERT =
+  "The outcome could not be confirmed. Check the document and the history below before retrying.";
+
 async function refreshReverts(path: string): Promise<void> {
+  const attempt = ++revertRefresh;
   try {
     const result = await api<{ reverts: RevertSummary[] }>(`/api/reverts?doc=${encodeURIComponent(path)}`);
-    if (current !== path) return;
+    if (current !== path || attempt !== revertRefresh) return;
     revertHistory = result.reverts;
     renderRail();
   } catch {
-    if (current === path) revertHistory = [];
+    // Keep what is showing. A failed refresh says nothing about the history itself, and
+    // blanking it would hide Restore at the moment the connection is already in doubt.
   }
 }
 
@@ -158,18 +166,34 @@ async function changeAgentEdits(action: "revert" | "restore", agentName: string,
   if (!path || shareRole === "view" || shareRole === "comment") return;
   const actor = await confirmRevert(action, agentName);
   if (!actor || current !== path) return;
+  revertNotice = null;
+  renderRail();
+  let notice: string | null = UNCONFIRMED_REVERT;
   try {
     const response = await fetch(withShare("/api/reverts"), {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ action, doc: path, actor, ...field }),
     });
-    const result = await response.json() as { error?: string };
-    if (!response.ok) throw new Error(result.error ?? "Could not update agent edits");
-    await refreshReverts(path);
-    toast(action === "revert" ? "Agent edits reverted. Restore is available below." : "Agent edits restored.");
-  } catch (error) {
-    toast(error instanceof Error ? error.message : "Could not update agent edits", true);
+    // A tunnel or proxy answers with HTML when the host is away, so the body may not be JSON.
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.ok && result) {
+      notice = null;
+      toast(action === "revert" ? "Agent edits reverted. Restore is available below." : "Agent edits restored.");
+    } else if (response.status < 500) {
+      // A plain refusal: nothing changed, so there is nothing to investigate.
+      notice = null;
+      toast(result?.error ?? "Could not update agent edits", true);
+    } else if (result?.error) {
+      notice = result.error;
+    }
+  } catch {
+    // The request may have reached the server before the connection dropped.
   }
+  if (current !== path) return;
+  revertNotice = notice;
+  // Even after a failure: the edit may have landed, and Restore is how a person recovers.
+  await refreshReverts(path);
+  renderRail();
 }
 const backlinksEl = $("#backlinks");
 const backlinksPanel = $("#backlinks-panel");
@@ -925,9 +949,22 @@ function renderRail(): void {
   const agents = authorsPresent(ytext)
     .map((id) => ({ id, meta: authorRegistry.get(id) }))
     .filter((a) => a.meta?.kind === "agent");
-  agentsSection.hidden = agents.length === 0 && revertHistory.length === 0;
+  agentsSection.hidden = agents.length === 0 && revertHistory.length === 0 && !revertNotice;
   const canChange = shareRole !== "view" && shareRole !== "comment";
+  const notice = revertNotice === null ? [] : [(() => {
+    const row = document.createElement("div");
+    row.className = "revert-notice";
+    row.setAttribute("role", "alert");
+    const message = document.createElement("span");
+    message.textContent = revertNotice;
+    const dismiss = document.createElement("button");
+    dismiss.textContent = "Dismiss";
+    dismiss.onclick = () => { revertNotice = null; renderRail(); };
+    row.append(message, dismiss);
+    return row;
+  })()];
   agentsEl.replaceChildren(
+    ...notice,
     ...agents.filter(() => canChange).map(({ id, meta }) => {
       const button = document.createElement("button");
       button.className = "revert";
@@ -1044,12 +1081,16 @@ async function open(path: string): Promise<void> {
 
   current = path;
   revertHistory = [];
+  revertNotice = null;
   void refreshReverts(path);
   conversationPanel.render(null, null);
   void refreshConversation();
   doc = new Y.Doc();
   ytext = doc.getText("content");
   comments = new CommentStore(doc);
+  // Revert records live in the CRDT, so a teammate's revert arrives here as it happens. The
+  // document changing with no explanation and no way back is the failure this prevents.
+  doc.getMap("agentReverts").observe(() => void refreshReverts(path));
 
   const url = new URL(`/sync?doc=${encodeURIComponent(path)}`, location.href);
   if (activeShareToken) url.searchParams.set("share", activeShareToken);

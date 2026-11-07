@@ -179,3 +179,12 @@ test("touch navigation and saved desktop preferences do not hide mobile controls
     await context.close();
   }
 });
+
+test("a vault without Discover leaves no empty tab beside Vault", async ({ page }) => {
+  // The suite's server runs with --no-discover, as does anyone who opts out of outbound requests.
+  await page.goto("/");
+  await expect(page.locator("#mode-discover")).toBeHidden();
+  const vault = await page.locator("#mode-vault").boundingBox();
+  const control = await page.locator(".modes").boundingBox();
+  expect(vault!.width).toBeGreaterThan(control!.width * 0.8);
+});
