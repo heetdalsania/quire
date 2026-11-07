@@ -9,22 +9,22 @@
     "dev": "vite"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.7.1",
+    "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.3.1",
-    "@codemirror/language": "^6.10.8",
-    "@codemirror/state": "^6.7.4",
-    "@codemirror/view": "^6.43.11",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@quire/bridge": "*",
-    "dompurify": "^3.4.15",
-    "lib0": "^0.2.99",
-    "marked": "^18.0.12",
+    "dompurify": "^3.4.17",
+    "lib0": "^0.2.119",
+    "marked": "^18.1.2",
     "mermaid": "^11.17.2",
     "y-codemirror.next": "^0.3.5",
     "y-indexeddb": "^9.0.12",
     "y-protocols": "^1.0.6",
-    "yjs": "^13.6.21"
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
-    "vite": "^8.2.2"
+    "vite": "^8.3.5"
   }
 }

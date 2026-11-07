@@ -1,7 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.6 - 2026-11-06
 
+### Security
+
+- Update bundled dependencies to clear published advisories, including DOMPurify 3.4.17 for
+  Markdown preview sanitizing, the MCP SDK 1.32.2, Zod 4.6.7, and transitive `express` stack,
+  `hono`, `fast-uri`, `ip-address` and `qs` fixes. Quire ships as one bundle, so these reach
+  users only through a new release. Two low-severity findings remain in KaTeX through Mermaid,
+  whose fix requires the separately reviewed Mermaid 12 migration.
+
+### Collaboration
+
+- Show a teammate's revert and its Restore action live, without reloading the document.
+- Keep Restore reachable when a revert's save fails, and show a notice that stays until
+  dismissed. Treat gateway errors and dropped connections as unconfirmed outcomes rather than
+  as refusals, and keep the visible history when a refresh fails.
+- Create a missing `--share-store` file privately on first run instead of exiting with a stack
+  trace. Report startup refusals, such as a busy port, as a one-line message.
+
+### Interface
+
+- Remove the empty tab left beside Vault when Discover is turned off.
 - Show a per-document **MCP read completed** state after a real successful `read_document`
   tool call. Keep link verification, live presence, and read proof separate; clear the
   proof on disconnect and do not treat the self-reported agent name as verified identity.

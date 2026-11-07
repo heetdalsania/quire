@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
 
 export type ShareRole = "view" | "comment" | "edit";
@@ -15,6 +15,15 @@ export interface Share {
   /** What the reviewer is being asked to look at. */
   brief: string | null;
   requestedBy: string | null;
+}
+
+function lstatIfPresent(path: string): Stats | null {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 /**
@@ -36,10 +45,14 @@ export class ShareRegistry {
     if (process.platform === "win32") {
       throw new Error("Private share-store permissions cannot be verified on Windows; --share-store is unavailable there");
     }
-    const parent = lstatSync(dirname(storePath));
+    const parent = lstatIfPresent(dirname(storePath));
+    if (!parent) throw new Error(`Share store directory does not exist: ${dirname(storePath)}`);
     if (!parent.isDirectory() || (parent.mode & 0o022) !== 0 || (process.getuid && parent.uid !== process.getuid())) {
       throw new Error("Share store directory must be owned by the current user and not writable by others");
     }
+    // Created exclusively, so a file or link that appears here first is an error rather than
+    // something to write through. The directory is already known to be private to this user.
+    if (!lstatIfPresent(storePath)) writeFileSync(storePath, '{"shares":[]}\n', { flag: "wx", mode: 0o600 });
     const stat = lstatSync(storePath);
     if (!stat.isFile() || (stat.mode & 0o077) !== 0 || (process.getuid && stat.uid !== process.getuid())) {
       throw new Error("Share store must be a private regular file owned by the current user (mode 600)");

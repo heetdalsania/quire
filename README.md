@@ -145,10 +145,9 @@ call on that document. The read proof is ephemeral and the agent name is self-re
 verifies a human identity or model account. This helper does not execute commands or contact an AI provider.
 On mobile, open **Files** to reach the sidebar.
 
-The development build also includes a persistent language selector with an experimental Simplified
-Chinese translation of core navigation, review actions, and agent setup. Advanced menus fall back
-to English; document content is never translated. Native-speaker review is welcome. These interface
-additions are not yet in the published beta.4 package.
+Quire also includes a persistent language selector with an experimental Simplified Chinese
+translation of core navigation, review actions, and agent setup. Advanced menus fall back to
+English; document content is never translated. Native-speaker review is welcome.
 
 Keep Quire running, then add its local MCP server to the client you use. These commands download
 the published Quire package from npm; they do not require a Quire account or credential.

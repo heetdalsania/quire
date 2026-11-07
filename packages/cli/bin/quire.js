@@ -39,7 +39,8 @@ if (args.includes("--help") || args.includes("-h")) {
                           when deliberately exposing the vault, e.g. via a tunnel.
     --quick-tunnel-host-file <path>  Trust the single exact Quick Tunnel hostname in
                           this local file, reloading it when the tunnel rotates.
-    --share-store <path>  Opt in to preserving share links in a private mode-600 file.
+    --share-store <path>  Opt in to preserving share links in a private mode-600 file,
+                          created on first run.
     --append-only-log <path>  Protect an existing "## Iteration log" section in a
                           Markdown file. Existing entries cannot be changed through Quire;
                           new entries can only be appended at the document end. Repeatable.
@@ -206,7 +207,9 @@ try {
   });
 } catch (error) {
   if (demoRoot) await rm(demoRoot, { recursive: true, force: true });
-  throw error;
+  // A startup refusal is a message for the person running this, not a crash to debug.
+  console.error(`\n  Quire could not start: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exit(1);
 }
 
 const count = server.vault.list().length;

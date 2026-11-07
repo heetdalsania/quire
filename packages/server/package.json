@@ -16,13 +16,13 @@
   "dependencies": {
     "@quire/agent": "*",
     "@quire/bridge": "*",
-    "lib0": "^0.2.99",
-    "ws": "^8.18.0",
+    "lib0": "^0.2.119",
+    "ws": "^8.22.0",
     "y-protocols": "^1.0.6",
-    "yjs": "^13.6.21"
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.18.2"
   },
   "main": "./dist/src/index.js"
 }
